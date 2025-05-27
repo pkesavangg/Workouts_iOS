@@ -134,6 +134,13 @@ struct ContentView: View {
             }, message: {
                 Text(errorMessage ?? "")
             })
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Refresh") {
+                        loadData()
+                    }
+                }
+            }
         }
     }
 
@@ -182,11 +189,37 @@ struct ContentView: View {
         }.resume()
     }
 
-    // Save to SwiftData, avoid duplicates
+    // Save to SwiftData, handle create/delete operations
     func saveToSwiftData(_ ops: [Operation]) {
+        // First, collect all entryTimestamps that have delete operations
+        let deletedTimestamps = Set(ops.compactMap { op in
+            op.operationType.lowercased() == "delete" ? op.entryTimestamp : nil
+        })
+        
+        // Remove any existing entries that have been deleted
+        for deletedTimestamp in deletedTimestamps {
+            if let existingEntry = savedEntries.first(where: { $0.entryTimestamp == deletedTimestamp }) {
+                modelContext.delete(existingEntry)
+                print("Removed deleted entry with timestamp: \(deletedTimestamp)")
+            }
+        }
+        
+        // Process create operations, but skip if they have corresponding delete operations
         for op in ops {
+            // Only process "create" operations
+            guard op.operationType.lowercased() == "create" else {
+                continue
+            }
+            
+            // Skip if this entry has been deleted
+            if deletedTimestamps.contains(op.entryTimestamp) {
+                print("Skipping create operation for timestamp \(op.entryTimestamp) because it has been deleted")
+                continue
+            }
+            
+            // Skip if already exists in local storage
             if savedEntries.contains(where: { $0.entryTimestamp == op.entryTimestamp }) {
-                continue // skip duplicates
+                continue
             }
 
             let entry = OperationEntry(
@@ -212,10 +245,12 @@ struct ContentView: View {
             )
 
             modelContext.insert(entry)
+            print("Added new entry with timestamp: \(op.entryTimestamp)")
         }
 
         do {
             try modelContext.save()
+            print("Successfully saved changes to SwiftData")
         } catch {
             print("Failed to save to SwiftData: \(error)")
         }
