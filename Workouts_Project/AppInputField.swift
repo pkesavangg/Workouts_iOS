@@ -23,6 +23,7 @@ struct TextInputConfig {
     var inputType: InputType
     var submitLabel: SubmitLabel = .next
     var errorMessage: String? = nil
+    var isDisabled: Bool = false
     
     // Bank input specific properties
     var maxLength: Int = 3
@@ -55,7 +56,7 @@ struct AppInputField: View {
                     // Floating label
                     Text(config.label)
                         .font((fieldIsFocused || !getCurrentValue().isEmpty) ? .system(size: 12, weight: .regular) : .system(size: 16, weight: .regular))
-                        .foregroundColor((config.errorMessage != nil ? Color.red : Color.gray.opacity(0.8)))
+                        .foregroundColor(config.isDisabled ? Color.gray.opacity(0.5) : (config.errorMessage != nil ? Color.red : Color.gray.opacity(0.8)))
                         .offset(y: (fieldIsFocused || !getCurrentValue().isEmpty) ? -15 : 0)
                         .offset(x: 16)
                         .animation(.easeInOut(duration: 0.2), value: fieldIsFocused || !getCurrentValue().isEmpty)
@@ -65,6 +66,7 @@ struct AppInputField: View {
                         if config.inputType == .password && !isSecureTextVisible {
                             SecureField("", text: $value)
                                 .submitLabel(config.submitLabel)
+                                .disabled(config.isDisabled)
                                 .onChange(of: fieldIsFocused) { newValue in
                                     print("Field focus changed: \(newValue)")
                                     isFocused = newValue
@@ -82,6 +84,7 @@ struct AppInputField: View {
                             TextField("", text: $displayValue)
                                 .submitLabel(config.submitLabel)
                                 .keyboardType(.numberPad)
+                                .disabled(config.isDisabled)
                                 .onChange(of: fieldIsFocused) { newValue in
                                     isFocused = newValue
                                     if let onEditingChanged = onEditingChanged {
@@ -100,6 +103,7 @@ struct AppInputField: View {
                             TextField("", text: $value)
                                 .submitLabel(config.submitLabel)
                                 .keyboardType(config.inputType == .number ? .numberPad : .default)
+                                .disabled(config.isDisabled)
                                 .onChange(of: fieldIsFocused) { newValue in
                                     isFocused = newValue
                                     if let onEditingChanged = onEditingChanged {
@@ -116,7 +120,7 @@ struct AppInputField: View {
                     .focused($fieldIsFocused)
                     .autocorrectionDisabled(true)
                     .font(.system(size: 16))
-                    .foregroundColor(.primary)
+                    .foregroundColor(config.isDisabled ? Color.gray.opacity(0.5) : .primary)
                     .padding(.top, (fieldIsFocused || !getCurrentValue().isEmpty) ? 8 : 0)
                     .padding(.leading, 16)
                 }
@@ -125,14 +129,19 @@ struct AppInputField: View {
                 .accentColor((config.errorMessage != nil ? Color.red : Color.gray.opacity(0.8)))
             }
             .frame(height: 56)
-            .background(Color(UIColor.systemBackground))
+            .background(config.isDisabled ? Color.gray.opacity(0.1) : Color(UIColor.systemBackground))
             .cornerRadius(10)
             .overlay(
                 HStack {
                     Spacer()
                     
-                    // Clear button
-                    if !getCurrentValue().isEmpty {
+                    // Disabled indicator or Clear button
+                    if config.isDisabled {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.custom("Open Sans", size: 20))
+                            .foregroundColor(.gray.opacity(0.5))
+                            .padding(.trailing, 12)
+                    } else if !getCurrentValue().isEmpty {
                         Button(action: {
                             print("Clear button tapped")
                             clearValue()
@@ -145,7 +154,7 @@ struct AppInputField: View {
                     }
                     
                     // Password visibility toggle
-                    if config.inputType == .password && !value.isEmpty {
+                    if config.inputType == .password && !value.isEmpty && !config.isDisabled {
                         Button(action: {
                             isSecureTextVisible.toggle()
                         }) {
@@ -157,7 +166,9 @@ struct AppInputField: View {
                 }
             )
             .onTapGesture {
-                fieldIsFocused = true
+                if !config.isDisabled {
+                    fieldIsFocused = true
+                }
             }
             .onChange(of: isFocused) {
                 fieldIsFocused = isFocused
@@ -300,6 +311,7 @@ struct TextInputFieldTestingView: View {
     @State var weightValue: String = ""
     @State var heightValue: String = ""
     @State var ageValue: String = ""
+    @State var disabledText: String = ""
     
     var body: some View {
         VStack(spacing: 20) {
@@ -375,6 +387,31 @@ struct TextInputFieldTestingView: View {
                 isFocused: .constant(false)
             )
             
+            // Disabled input example
+            AppInputField(
+                config: TextInputConfig(
+                    label: "Disabled Input",
+                    placeholder: "This field is disabled",
+                    inputType: .text,
+                    isDisabled: true
+                ),
+                value: $disabledText,
+                isFocused: .constant(false)
+            )
+            
+            // Disabled bank input example
+            AppInputField(
+                config: TextInputConfig(
+                    label: "Disabled Bank Input",
+                    placeholder: "0.0",
+                    inputType: .bankInput,
+                    isDisabled: true,
+                    maxLength: 3
+                ),
+                value: $weightValue,
+                isFocused: .constant(false)
+            )
+            
             // Display current values
             VStack(alignment: .leading, spacing: 4) {
                 Text("Values:")
@@ -382,6 +419,7 @@ struct TextInputFieldTestingView: View {
                 Text("Weight: '\(weightValue)'")
                 Text("Height: '\(heightValue)'")
                 Text("Experience: '\(ageValue)'")
+                Text("Disabled: '\(disabledText)'")
             }
             .font(.caption)
             .foregroundColor(.secondary)
