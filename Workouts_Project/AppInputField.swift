@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import Combine
 
 // Input type enum to determine the field behavior
 enum InputType {
     case text
     case number
     case password
+    case bankInput // New bank input type
 }
 
 // Configuration model for the input field
@@ -21,6 +23,11 @@ struct TextInputConfig {
     var inputType: InputType
     var submitLabel: SubmitLabel = .next
     var errorMessage: String? = nil
+    
+    // Bank input specific properties
+    var maxLength: Int = 3
+    var maxValue: Double? = nil
+    var allowWholeNumbers: Bool = false
 }
 
 struct AppInputField: View {
@@ -37,6 +44,7 @@ struct AppInputField: View {
     
     // Internal state
     @State private var isSecureTextVisible: Bool = false
+    @State private var displayValue: String = ""
     @FocusState private var fieldIsFocused: Bool
     
     var body: some View {
@@ -46,20 +54,19 @@ struct AppInputField: View {
                 ZStack(alignment: .leading) {
                     // Floating label
                     Text(config.label)
-                        .font((fieldIsFocused || !value.isEmpty) ? .system(size: 12, weight: .regular) : .system(size: 16, weight: .regular))
+                        .font((fieldIsFocused || !getCurrentValue().isEmpty) ? .system(size: 12, weight: .regular) : .system(size: 16, weight: .regular))
                         .foregroundColor((config.errorMessage != nil ? Color.red : Color.gray.opacity(0.8)))
-                        .offset(y: (fieldIsFocused || !value.isEmpty) ? -15 : 0)
-                        .offset(x: 16) // Add leading padding to align with error message
-                        .animation(.easeInOut(duration: 0.2), value: fieldIsFocused || !value.isEmpty)
-//                        .padding(.leading, 16)
+                        .offset(y: (fieldIsFocused || !getCurrentValue().isEmpty) ? -15 : 0)
+                        .offset(x: 16)
+                        .animation(.easeInOut(duration: 0.2), value: fieldIsFocused || !getCurrentValue().isEmpty)
+                    
                     // Input field
                     Group {
-                        
                         if config.inputType == .password && !isSecureTextVisible {
                             SecureField("", text: $value)
                                 .submitLabel(config.submitLabel)
                                 .onChange(of: fieldIsFocused) { newValue in
-                                   print("Field focus changed: \(newValue)")
+                                    print("Field focus changed: \(newValue)")
                                     isFocused = newValue
                                     if let onEditingChanged = onEditingChanged {
                                         onEditingChanged(newValue)
@@ -69,6 +76,25 @@ struct AppInputField: View {
                                     if let onCommit = onCommit {
                                         onCommit()
                                     }
+                                }
+                        } else if config.inputType == .bankInput {
+                            // Bank input field
+                            TextField("", text: $displayValue)
+                                .submitLabel(config.submitLabel)
+                                .keyboardType(.numberPad)
+                                .onChange(of: fieldIsFocused) { newValue in
+                                    isFocused = newValue
+                                    if let onEditingChanged = onEditingChanged {
+                                        onEditingChanged(newValue)
+                                    }
+                                }
+                                .onSubmit {
+                                    if let onCommit = onCommit {
+                                        onCommit()
+                                    }
+                                }
+                                .onReceive(Just(displayValue)) { newValue in
+                                    formatBankInput(newValue)
                                 }
                         } else {
                             TextField("", text: $value)
@@ -91,39 +117,29 @@ struct AppInputField: View {
                     .autocorrectionDisabled(true)
                     .font(.system(size: 16))
                     .foregroundColor(.primary)
-                    .padding(.top, (fieldIsFocused || !value.isEmpty) ? 8 : 0)
-                    .padding(.leading, 16) // Add leading padding to the text input
-    //                .placeholder(when: value.isEmpty && !fieldIsFocused) {
-    //                    Text(config.placeholder)
-    //                        .foregroundColor(.gray.opacity(0.6))
-    //                        .font(.system(size: 16))
-    //                }
+                    .padding(.top, (fieldIsFocused || !getCurrentValue().isEmpty) ? 8 : 0)
+                    .padding(.leading, 16)
                 }
                 .padding(.vertical, 8)
-                .padding(.horizontal, 4) // Reduced horizontal padding to account for the new text padding
+                .padding(.horizontal, 4)
                 .accentColor((config.errorMessage != nil ? Color.red : Color.gray.opacity(0.8)))
             }
             .frame(height: 56)
             .background(Color(UIColor.systemBackground))
             .cornerRadius(10)
-//            .overlay(
-//                RoundedRectangle(cornerRadius: 10)
-//                    .stroke(fieldIsFocused ? Color.blue : (config.errorMessage != nil ? Color.red : Color.gray.opacity(0.3)), lineWidth: fieldIsFocused || config.errorMessage != nil ? 2 : 1)
-//            )
             .overlay(
                 HStack {
                     Spacer()
                     
                     // Clear button
-                    if !value.isEmpty {
+                    if !getCurrentValue().isEmpty {
                         Button(action: {
                             print("Clear button tapped")
-                            value = ""
+                            clearValue()
                         }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.custom("Open Sans", size: 20))
                                 .foregroundColor(config.errorMessage != nil ? .red : .gray)
-                                
                         }
                         .padding(.trailing, 8)
                     }
@@ -148,16 +164,120 @@ struct AppInputField: View {
             }
             .onAppear {
                 fieldIsFocused = isFocused
+                initializeBankInput()
             }
+            
             if let errorMessage = config.errorMessage {
                 Text(errorMessage)
                     .font(.caption)
                     .foregroundColor(.red)
                     .padding(.bottom, 4)
-                    .padding(.leading, 16) // Align with the label
+                    .padding(.leading, 16)
             }
         }
-
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func getCurrentValue() -> String {
+        return config.inputType == .bankInput ? displayValue : value
+    }
+    
+    private func clearValue() {
+        if config.inputType == .bankInput {
+            displayValue = "0.0"
+            value = "0.0"
+        } else {
+            value = ""
+        }
+    }
+    
+    private func initializeBankInput() {
+        guard config.inputType == .bankInput else { return }
+        
+        if value.isEmpty {
+            displayValue = "0.0"
+            value = "0.0"
+        } else {
+            displayValue = value
+        }
+    }
+    
+    private func formatBankInput(_ input: String) {
+        guard config.inputType == .bankInput else { return }
+        
+        let formatted: String
+        
+        if config.allowWholeNumbers {
+            formatted = wholeNumberInput(input)
+        } else {
+            formatted = bankInput(input)
+        }
+        
+        // Check against max value if specified
+        if let maxVal = config.maxValue,
+           let numValue = Double(formatted),
+           numValue > maxVal {
+            return // Don't update if exceeds max
+        }
+        
+        if displayValue != formatted {
+            displayValue = formatted
+        }
+        
+        value = formatted
+    }
+    
+    private func bankInput(_ input: String) -> String {
+        // Handle empty or invalid input
+        if input.isEmpty || input == "." {
+            return "0.0"
+        }
+        
+        // Extract only digits
+        let digitsOnly = input.replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
+        
+        // Handle empty digits or just "0"
+        if digitsOnly.isEmpty || digitsOnly == "0" {
+            return "0.0"
+        }
+        
+        // Remove leading zeros
+        let trimmedDigits = digitsOnly.replacingOccurrences(of: "^0+", with: "", options: .regularExpression)
+        
+        if trimmedDigits.isEmpty {
+            return "0.0"
+        }
+        
+        // Limit to maxLength digits
+        let limitedDigits = String(trimmedDigits.prefix(config.maxLength))
+        let length = limitedDigits.count
+        
+        switch length {
+        case 1:
+            return "0.\(limitedDigits)"
+        default:
+            let beforeDecimal = limitedDigits.dropLast()
+            let afterDecimal = limitedDigits.suffix(1)
+            return "\(beforeDecimal).\(afterDecimal)"
+        }
+    }
+    
+    private func wholeNumberInput(_ input: String) -> String {
+        let digitsOnly = input.replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
+        
+        if digitsOnly.isEmpty {
+            return "0"
+        }
+        
+        let trimmedDigits = digitsOnly.replacingOccurrences(of: "^0+", with: "", options: .regularExpression)
+        
+        if trimmedDigits.isEmpty {
+            return "0"
+        }
+        
+        let limitedDigits = String(trimmedDigits.prefix(config.maxLength))
+        return limitedDigits
     }
 }
 
@@ -175,8 +295,12 @@ extension View {
     }
 }
 
-struct textInputFieldTestingView: View {
+struct TextInputFieldTestingView: View {
     @State var text: String = ""
+    @State var weightValue: String = ""
+    @State var heightValue: String = ""
+    @State var ageValue: String = ""
+    
     var body: some View {
         VStack(spacing: 20) {
             // Text input example
@@ -213,13 +337,60 @@ struct textInputFieldTestingView: View {
                 value: $text,
                 isFocused: .constant(false)
             )
+            
+            // Bank input examples
+            AppInputField(
+                config: TextInputConfig(
+                    label: "Weight (kg)",
+                    placeholder: "0.0",
+                    inputType: .bankInput,
+                    maxLength: 4,
+                    maxValue: 999.9
+                ),
+                value: $weightValue,
+                isFocused: .constant(false)
+            )
+            
+            AppInputField(
+                config: TextInputConfig(
+                    label: "Height (cm)",
+                    placeholder: "0.0",
+                    inputType: .bankInput,
+                    maxLength: 3,
+                    maxValue: 99.9
+                ),
+                value: $heightValue,
+                isFocused: .constant(false)
+            )
+            
+            AppInputField(
+                config: TextInputConfig(
+                    label: "Years of Experience",
+                    placeholder: "0",
+                    inputType: .bankInput,
+                    maxLength: 2,
+                    allowWholeNumbers: true
+                ),
+                value: $ageValue,
+                isFocused: .constant(false)
+            )
+            
+            // Display current values
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Values:")
+                    .font(.headline)
+                Text("Weight: '\(weightValue)'")
+                Text("Height: '\(heightValue)'")
+                Text("Experience: '\(ageValue)'")
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
         }
         .padding()
         .background(Color(.systemGroupedBackground))
-        .previewLayout(.sizeThatFits)
     }
 }
 
-#Preview(body: {
-    textInputFieldTestingView()
-})
+#Preview {
+    TextInputFieldTestingView()
+}
