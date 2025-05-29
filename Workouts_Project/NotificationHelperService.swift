@@ -38,13 +38,16 @@ public struct ToastModel {
     var duration: Double = 3
 }
 
-
+public struct LoaderModel {
+    var text: String?
+}
 
 class NotificationHelperService: ObservableObject {
     static let shared = NotificationHelperService()
 
     @Published var alertData: AlertModel? = nil
     @Published var toastData: ToastModel? = nil
+    @Published var loaderData: LoaderModel? = nil
 
     var isAlertVisible: Bool {
         alertData != nil
@@ -52,6 +55,10 @@ class NotificationHelperService: ObservableObject {
     
     var isToastVisible: Bool {
         toastData != nil
+    }
+
+    var isLoaderVisible: Bool {
+        loaderData != nil
     }
 
     func showAlert(_ alert: AlertModel) {
@@ -78,7 +85,25 @@ class NotificationHelperService: ObservableObject {
         }
     }
 
+    func showLoader(_ loader: LoaderModel) {
+        DispatchQueue.main.async {
+            self.loaderData = loader
+        }
+    }
 
+    func dismissLoader() {
+        DispatchQueue.main.async {
+            self.loaderData = nil
+        }
+    }
+    
+    func dismissAllNotifications() {
+        DispatchQueue.main.async {
+            self.alertData = nil
+            self.toastData = nil
+            self.loaderData = nil
+        }
+    }
 }
 
 struct AlertTestMainView: View {
@@ -90,13 +115,11 @@ struct AlertTestMainView: View {
         }
         .presentAlert(alertData: $alertService.alertData)
         .presentToast(data: $alertService.toastData)
+        .presentLoader(loaderData: $alertService.loaderData)
     }
 }
 
-
-
-
-struct GlobalAlertModifier: ViewModifier {
+struct AlertModifier: ViewModifier {
     @Binding var alertData: AlertModel?
 
     var isAlertPresented: Binding<Bool> {
@@ -256,17 +279,48 @@ struct ToastModifier: ViewModifier {
     }
 }
 
+struct LoaderModifier: ViewModifier {
+    @Binding var loaderData: LoaderModel?
+
+    func body(content: Content) -> some View {
+        ZStack {
+            content
+            if let loader = loaderData {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                    if let text = loader.text {
+                        Text(text)
+                            .foregroundColor(.white)
+                            .font(.headline)
+                    }
+                }
+                .padding(32)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(16)
+            }
+        }
+        .animation(.easeInOut, value: loaderData != nil)
+        .transition(.opacity)
+    }
+}
 
 extension View {
     public func presentAlert(alertData: Binding<AlertModel?>) -> some View {
-        self.modifier(GlobalAlertModifier(alertData: alertData))
+        self.modifier(AlertModifier(alertData: alertData))
     }
     
     public func presentToast(data: Binding<ToastModel?>) -> some View {
         self.modifier(ToastModifier(toastData: data))
     }
-}
 
+    public func presentLoader(loaderData: Binding<LoaderModel?>) -> some View {
+        self.modifier(LoaderModifier(loaderData: loaderData))
+    }
+}
 
 import Combine
 
@@ -338,8 +392,18 @@ class AlertTestingViewModel{
             )
         )
     }
-}
+    
+    func showLoader() {
+        NotificationHelperService.shared.showLoader(
+            LoaderModel(text: "Loading...")
+        )
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            self.notificationHelperService.dismissLoader()
+        }
+    }
 
+}
 
 struct AlertTestingView: View {
     @Bindable var viewModel = AlertTestingViewModel()
@@ -361,6 +425,10 @@ struct AlertTestingView: View {
             
             Button("Show Toast with Button") {
                 viewModel.showToastWithButton()
+            }
+            
+            Button("Show Loader") {
+                viewModel.showLoader()
             }
         }
     }
