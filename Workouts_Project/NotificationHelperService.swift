@@ -30,6 +30,13 @@ public struct AlertModel {
     var onCancelClick: () -> () = { }
 }
 
+public struct ToastModel {
+    var title: String
+    var message: String?
+    var buttonView: AnyView?
+    var onClick: () -> Void = {}
+    var duration: Double = 3
+}
 
 
 
@@ -37,9 +44,14 @@ class NotificationHelperService: ObservableObject {
     static let shared = NotificationHelperService()
 
     @Published var alertData: AlertModel? = nil
+    @Published var toastData: ToastModel? = nil
 
     var isAlertVisible: Bool {
         alertData != nil
+    }
+    
+    var isToastVisible: Bool {
+        toastData != nil
     }
 
     func showAlert(_ alert: AlertModel) {
@@ -53,6 +65,20 @@ class NotificationHelperService: ObservableObject {
             self.alertData = nil
         }
     }
+
+    func showToast(_ data: ToastModel) {
+        DispatchQueue.main.async {
+            self.toastData = data
+        }
+    }
+
+    func dismissToast() {
+        DispatchQueue.main.async {
+            self.toastData = nil
+        }
+    }
+
+
 }
 
 struct AlertTestMainView: View {
@@ -63,8 +89,12 @@ struct AlertTestMainView: View {
             AlertTestingView()
         }
         .presentAlert(alertData: $alertService.alertData)
+        .presentToast(data: $alertService.toastData)
     }
 }
+
+
+
 
 struct GlobalAlertModifier: ViewModifier {
     @Binding var alertData: AlertModel?
@@ -126,9 +156,114 @@ struct GlobalAlertModifier: ViewModifier {
     }
 }
 
+struct ToastModifier: ViewModifier {
+    @Binding var toastData: ToastModel?
+
+    @State private var offset = CGSize.zero
+    @State private var isDragging = false
+    @State private var timer: DispatchSourceTimer?
+
+    var isVisible: Binding<Bool> {
+        Binding(
+            get: { toastData != nil },
+            set: { newValue in
+                if !newValue {
+                    toastData = nil
+                }
+            }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        ZStack {
+            content
+            VStack {
+                if isVisible.wrappedValue, let data = toastData {
+                    HStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(data.title)
+                                .font(.callout)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            if let subtitle = data.message {
+                                Text(subtitle)
+                                    .font(.callout)
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+
+                        Spacer()
+
+                        if let button = data.buttonView {
+                            Button {
+                                data.onClick()
+                                toastData = nil
+                            } label: {
+                                button
+                                    .foregroundColor(.white)
+                                    .padding(.trailing, 5)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(width: min(UIScreen.main.bounds.width * 0.9, 550))
+                    .padding(12)
+                    .background(Color.blue)
+                    .cornerRadius(15)
+                    .padding()
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .gesture(
+                        DragGesture()
+                            .onChanged { gesture in
+                                offset.width = gesture.translation.width
+                                isDragging = true
+                            }
+                            .onEnded { _ in
+                                withAnimation {
+                                    toastData = nil
+                                    offset = .zero
+                                    isDragging = false
+                                }
+                                timer?.cancel()
+                                timer = nil
+                            }
+                    )
+                    .onAppear {
+                        timer?.cancel()
+                        let newTimer = DispatchSource.makeTimerSource()
+                        newTimer.schedule(deadline: .now() + data.duration)
+                        newTimer.setEventHandler {
+                            DispatchQueue.main.async {
+                                withAnimation {
+                                    toastData = nil
+                                }
+                            }
+                        }
+                        newTimer.resume()
+                        timer = newTimer
+                    }
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
+
 extension View {
     public func presentAlert(alertData: Binding<AlertModel?>) -> some View {
         self.modifier(GlobalAlertModifier(alertData: alertData))
+    }
+    
+    public func presentToast(data: Binding<ToastModel?>) -> some View {
+        self.modifier(ToastModifier(toastData: data))
     }
 }
 
@@ -178,6 +313,31 @@ class AlertTestingViewModel{
             )
             notificationHelperService.showAlert(alertData)
     }
+    
+    func showToast() {
+        NotificationHelperService.shared.showToast(
+            ToastModel(
+                title: "Success",
+                message: "Your action was completed!",
+                duration: 2
+            )
+        )
+    }
+    
+    func showToastWithButton() {
+        NotificationHelperService.shared.showToast(
+            ToastModel(
+                title: "Success",
+                message: "Your action was completed!",
+                buttonView: AnyView(
+                    Button("Undo") {
+                        print("Undo action")
+                    }
+                ),
+                duration: 2
+            )
+        )
+    }
 }
 
 
@@ -193,6 +353,14 @@ struct AlertTestingView: View {
             
             Button("Show Input Alert") {
                 viewModel.showInputAlert()
+            }
+            
+            Button("Show Toast") {
+                viewModel.showToast()
+            }
+            
+            Button("Show Toast with Button") {
+                viewModel.showToastWithButton()
             }
         }
     }
