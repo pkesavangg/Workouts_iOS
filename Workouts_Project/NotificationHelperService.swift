@@ -25,128 +25,151 @@ public struct AlertModel {
     var message: String?
     var submitButtonText: String?
     var cancelButtonText: String = "OK"
-    var placeHolder: String = ""
-    var value: String = ""
-    var inputField: Bool = false
-    var isEmailField: Bool = false
-    var onSubmitClick: (String)->() = { _ in }
-    var onCancelClick: ()->() = { }
+    var inputField: InputField? = nil
+    var onSubmitClick: (String) -> () = { _ in }
+    var onCancelClick: () -> () = { }
 }
 
-struct AlertModifier: ViewModifier {
-    @Binding var showAlert: Bool
-    @Binding var alertData: AlertModel
+
+
+
+class NotificationHelperService: ObservableObject {
+    static let shared = NotificationHelperService()
+
+    @Published var alertData: AlertModel? = nil
+
+    var isAlertVisible: Bool {
+        alertData != nil
+    }
+
+    func showAlert(_ alert: AlertModel) {
+        DispatchQueue.main.async {
+            self.alertData = alert
+        }
+    }
+
+    func dismissAlert() {
+        DispatchQueue.main.async {
+            self.alertData = nil
+        }
+    }
+}
+
+struct AlertTestMainView: View {
+    @StateObject private var alertService = NotificationHelperService.shared
+
+    var body: some View {
+        ZStack {
+            AlertTestingView()
+        }
+        .presentAlert(alertData: $alertService.alertData)
+    }
+}
+
+struct GlobalAlertModifier: ViewModifier {
+    @Binding var alertData: AlertModel?
+
+    var isAlertPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { alertData != nil },
+            set: { newValue in
+                if !newValue {
+                    alertData = nil
+                }
+            }
+        )
+    }
 
     func body(content: Content) -> some View {
         content
-            .alert(alertData.title, isPresented: $showAlert) {
-                // Input field (optional)
-                if alertData.inputField {
-                    TextField(alertData.placeHolder, text: $alertData.value)
-                        .keyboardType(alertData.isEmailField ? .emailAddress : .default)
+            .alert(
+                alertData?.title ?? "",
+                isPresented: isAlertPresented
+            ) {
+                if let alert = alertData {
+                    if let inputField = alert.inputField {
+                        TextField(inputField.placeholder, text: Binding(
+                            get: { alertData?.inputField?.value ?? "" },
+                            set: { alertData?.inputField?.value = $0 }
+                        ))
+                        .keyboardType(inputField.type == .email ? .emailAddress : .default)
                         .autocapitalization(.none)
-                }
-
-                // Cancel button
-                Button(alertData.cancelButtonText.uppercased()) {
-                    alertData.onCancelClick()
-                }
-
-                // Submit button
-                if let submit = alertData.submitButtonText {
-                    Button(submit.uppercased()) {
-                        alertData.inputField = false // optional reset
-                        alertData.onSubmitClick(alertData.value)
                     }
-                    .keyboardShortcut(.defaultAction)
+
+                    Button(alert.cancelButtonText.uppercased()) {
+                        alert.onCancelClick()
+                        alertData = nil
+                    }
+
+                    if let submit = alert.submitButtonText {
+                        Button(submit.uppercased()) {
+                            let value = alertData?.inputField?.value ?? ""
+                            alert.onSubmitClick(value)
+                            alertData = nil
+                        }
+                        .keyboardShortcut(.defaultAction)
+                    }
                 }
             } message: {
-                if let message = alertData.message {
+                if let message = alertData?.message {
                     Text(message)
                 }
             }
     }
 }
 
-
-
-
-
 extension View {
-    public func presentAlert(showAlert: Binding<Bool>, alertData: Binding<AlertModel>) -> some View {
-        self.modifier(AlertModifier(showAlert: showAlert, alertData: alertData))
+    public func presentAlert(alertData: Binding<AlertModel?>) -> some View {
+        self.modifier(GlobalAlertModifier(alertData: alertData))
     }
 }
 
 
-class NotificationHelperService: ObservableObject {
-    @Published var alertData: AlertModel? = nil
-    static let shared = NotificationHelperService()
-}
 import Combine
 
 @Observable
 class AlertTestingViewModel{
     var notificationHelperService = NotificationHelperService.shared
-    var alertData: AlertModel = AlertModel(title: "", message: nil, submitButtonText: nil, cancelButtonText: "OK", placeHolder: "", value: "")
-    var canShowAlert: Bool = false
-    private var cancellables = Set<AnyCancellable>()
-    init() {
-        // Initialize with current values from AccountService
-        notificationHelperService.$alertData
-            .sink(receiveValue: { data in
-                print("Received alert data: \(String(describing: data))")
-                if let data = data {
-                    self.alertData = data
-                }
-                self.canShowAlert = data != nil
-            })
-            .store(in: &cancellables)
-    }
+
     
     func showAlert() {
-        let alertData = AlertModel(
-            title: "Confirm",
-            message: "Are you sure?",
-            submitButtonText: "Yes",
-            cancelButtonText: "No",
-            onSubmitClick: { value in
-                // handle submit
-               // self.alertData = nil
-            },
-            onCancelClick: {
-                // handle cancel
-                // self.alertData = nil
-            }
+        NotificationHelperService.shared.showAlert(
+            AlertModel(
+                title: "Confirm",
+                message: "Do you want to continue?",
+                submitButtonText: "Yes",
+                cancelButtonText: "No",
+                onSubmitClick: { value in
+                    print("Confirmed with value: \(value)")
+                },
+                onCancelClick: {
+                    print("Cancelled")
+                }
+            )
         )
-        
-        DispatchQueue.main.async {
-            self.notificationHelperService.alertData = alertData
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            self.notificationHelperService.alertData = nil
         }
         
     }
     
     func showInputAlert() {
         let alertData = AlertModel(
-            title: "Confirm",
-            message: "Are you sure?",
-            submitButtonText: "Yes",
-            cancelButtonText: "No",
-            placeHolder: "Enter value",
-            value: "",
-            inputField: true,
-            onSubmitClick: { value in
-                print("Submitted value: \(value)")
-                // handle submit
-            },
-            onCancelClick: {
-                // handle cancel
-            }
-        )
-        notificationHelperService.alertData = alertData
+                title: "Confirm",
+                message: "Are you sure?",
+                submitButtonText: "Yes",
+                cancelButtonText: "No",
+                inputField: InputField(placeholder: "Enter value", value: "", type: .email),
+                onSubmitClick: { value in
+                    print("Submitted value: \(value)")
+                },
+                onCancelClick: {
+                    print("Cancelled")
+                }
+            )
+            notificationHelperService.showAlert(alertData)
     }
-
-    
 }
 
 
@@ -155,16 +178,19 @@ struct AlertTestingView: View {
     var body: some View {
         VStack {
             Text("Hello, World!")
-               
+            
             Button("Show Alert") {
+                viewModel.showAlert()
+            }
+            
+            Button("Show Input Alert") {
                 viewModel.showInputAlert()
             }
         }
-        .presentAlert(showAlert: $viewModel.canShowAlert, alertData: $viewModel.alertData)
     }
 }
 
 #Preview(body: {
-    AlertTestingView()
+    AlertTestMainView()
 })
 
