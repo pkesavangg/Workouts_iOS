@@ -88,11 +88,19 @@ struct GlobalAlertModifier: ViewModifier {
             ) {
                 if let alert = alertData {
                     if let inputField = alert.inputField {
-                        TextField(inputField.placeholder, text: Binding(
+                        let binding = Binding(
                             get: { alertData?.inputField?.value ?? "" },
                             set: { alertData?.inputField?.value = $0 }
-                        ))
-                        .keyboardType(inputField.type == .email ? .emailAddress : .default)
+                        )
+
+                        Group {
+                            if inputField.type == .password {
+                                SecureField(inputField.placeholder, text: binding)
+                            } else {
+                                TextField(inputField.placeholder, text: binding)
+                                    .keyboardType(inputField.type == .email ? .emailAddress : .default)
+                            }
+                        }
                         .autocapitalization(.none)
                     }
 
@@ -160,7 +168,7 @@ class AlertTestingViewModel{
                 message: "Are you sure?",
                 submitButtonText: "Yes",
                 cancelButtonText: "No",
-                inputField: InputField(placeholder: "Enter value", value: "", type: .email),
+                inputField: InputField(placeholder: "Enter value", value: "", type: .password),
                 onSubmitClick: { value in
                     print("Submitted value: \(value)")
                 },
