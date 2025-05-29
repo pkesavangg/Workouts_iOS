@@ -34,6 +34,6 @@ struct Workouts_ProjectApp: App {
 
 struct RootView: View {
     var body: some View {
-        ContentView()
+        AlertTestMainView()
     }
 }

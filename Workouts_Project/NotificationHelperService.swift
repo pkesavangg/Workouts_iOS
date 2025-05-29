@@ -42,12 +42,18 @@ public struct LoaderModel {
     var text: String?
 }
 
+public struct ModalViewState {
+    var contentView: AnyView = AnyView(EmptyView())
+}
+
 class NotificationHelperService: ObservableObject {
     static let shared = NotificationHelperService()
 
     @Published var alertData: AlertModel? = nil
     @Published var toastData: ToastModel? = nil
     @Published var loaderData: LoaderModel? = nil
+    @Published var modalViewData: ModalViewState? = nil
+
 
     var isAlertVisible: Bool {
         alertData != nil
@@ -104,6 +110,35 @@ class NotificationHelperService: ObservableObject {
             self.loaderData = nil
         }
     }
+    
+    func showModal(_ modal: ModalViewState) {
+        DispatchQueue.main.async {
+            self.modalViewData = modal
+        }
+    }
+    
+    func dismissModal() {
+        DispatchQueue.main.async {
+            self.modalViewData = nil
+        }
+    }
+}
+
+struct ModalViewModifier: ViewModifier {
+    @Binding var modalViewData: ModalViewState?
+
+    func body(content: Content) -> some View {
+        ZStack {
+            content
+            if let modal = modalViewData {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                modal.contentView
+                    .transition(.scale)
+            }
+        }
+        .animation(.easeInOut, value: modalViewData != nil)
+    }
 }
 
 struct AlertTestMainView: View {
@@ -116,6 +151,8 @@ struct AlertTestMainView: View {
         .presentAlert(alertData: $alertService.alertData)
         .presentToast(data: $alertService.toastData)
         .presentLoader(loaderData: $alertService.loaderData)
+        .presentModal(modalViewData: $alertService.modalViewData)
+
     }
 }
 
@@ -320,6 +357,10 @@ extension View {
     public func presentLoader(loaderData: Binding<LoaderModel?>) -> some View {
         self.modifier(LoaderModifier(loaderData: loaderData))
     }
+    
+    public func presentModal(modalViewData: Binding<ModalViewState?>) -> some View {
+        self.modifier(ModalViewModifier(modalViewData: modalViewData))
+    }
 }
 
 import Combine
@@ -373,7 +414,7 @@ class AlertTestingViewModel{
             ToastModel(
                 title: "Success",
                 message: "Your action was completed!",
-                duration: 2
+                duration: 20
             )
         )
     }
@@ -401,6 +442,12 @@ class AlertTestingViewModel{
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             self.notificationHelperService.dismissLoader()
         }
+    }
+    
+    func showModal() {
+        NotificationHelperService.shared.showModal(
+            ModalViewState(contentView: AnyView(ScaleHelpModal()))
+        )
     }
 
 }
@@ -430,7 +477,71 @@ struct AlertTestingView: View {
             Button("Show Loader") {
                 viewModel.showLoader()
             }
+            
+            Button("Show Modal") {
+                viewModel.showModal()
+            }
         }
+    }
+}
+
+struct ScaleHelpModal: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Spacer()
+                Button(action: {
+                    NotificationHelperService.shared.dismissModal()
+                }) {
+                    Image(systemName: "xmark")
+                        .foregroundColor(.gray)
+                        .padding(8)
+                }
+            }
+            .padding(.top, 4)
+            .padding(.trailing, 4)
+
+            Text("Check the back of your scale for a sticker with your four-digit model number.")
+                .font(.body)
+                .multilineTextAlignment(.leading)
+                .foregroundColor(.black)
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.gray, lineWidth: 2)
+                    .frame(height: 70)
+                HStack(spacing: 0) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 32, height: 32)
+                        .overlay(Text("G").font(.caption).foregroundColor(.gray))
+                        .padding(.leading, 12)
+                    Text("GREATERGOODS.COM/")
+                        .font(.subheadline)
+                        .foregroundColor(.black)
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 44, height: 44)
+                        Text("1234")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    .padding(.trailing, 12)
+                }
+            }
+            .padding(.vertical, 8)
+
+            Text("For example, if you have a 0375 Bluetooth Scale, your sticker will show the URL greatergoods.com/0375.")
+                .font(.body)
+                .multilineTextAlignment(.leading)
+                .foregroundColor(.black)
+        }
+        .padding(24)
+        .background(Color.white)
+        .cornerRadius(24)
+        .shadow(radius: 24)
+        .frame(maxWidth: 350)
     }
 }
 
