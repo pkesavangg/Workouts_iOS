@@ -44,6 +44,7 @@ public struct LoaderModel {
 
 public struct ModalViewState {
     var contentView: AnyView = AnyView(EmptyView())
+    var backdropDismiss: Bool = false
 }
 
 class NotificationHelperService: ObservableObject {
@@ -133,6 +134,12 @@ struct ModalViewModifier: ViewModifier {
             if let modal = modalViewData {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if modal.backdropDismiss {
+                            modalViewData = nil
+                        }
+                    }
                 modal.contentView
                     .transition(.scale)
             }
@@ -143,10 +150,17 @@ struct ModalViewModifier: ViewModifier {
 
 struct AlertTestMainView: View {
     @StateObject private var alertService = NotificationHelperService.shared
-
+@State private var showAlert = false
     var body: some View {
         ZStack {
+//            Button("Show Testing Sheet") {
+//                showAlert = true
+//            }
+            
             AlertTestingView()
+        }
+        .sheet(isPresented: $showAlert) {
+                AlertTestingView()
         }
         .presentAlert(alertData: $alertService.alertData)
         .presentToast(data: $alertService.toastData)
@@ -448,6 +462,14 @@ class AlertTestingViewModel{
         NotificationHelperService.shared.showModal(
             ModalViewState(contentView: AnyView(ScaleHelpModal()))
         )
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            NotificationHelperService.shared.showModal(
+                ModalViewState(
+                    contentView: AnyView(Text("This is another modal view")),
+                               backdropDismiss: true)
+            )
+        }
     }
 
 }

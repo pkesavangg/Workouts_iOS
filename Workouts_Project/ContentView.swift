@@ -103,7 +103,7 @@ struct Operation: Codable, Identifiable {
 }
 
 // MARK: - ContentView
-struct ContentView: View {
+struct ReactiveFormTestingView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var savedEntries: [OperationEntry]
     @State private var errorMessage: String?
@@ -258,7 +258,7 @@ struct ContentView: View {
 }
 
 // MARK: - Preview
-#Preview {
-    ContentView()
-        .modelContainer(for: OperationEntry.self, inMemory: true)
-}
+//#Preview {
+//    ContentView()
+//        .modelContainer(for: OperationEntry.self, inMemory: true)
+//}

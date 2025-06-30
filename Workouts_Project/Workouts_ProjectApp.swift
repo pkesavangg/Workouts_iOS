@@ -10,30 +10,35 @@ import SwiftData
 
 @main
 struct Workouts_ProjectApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-    
     var body: some Scene {
         WindowGroup {
-            RootView()
+            VStack {
+              //  HKDemoView()
+            }
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(for: [Account.self, GoalSetting.self])
     }
 }
-
 
 struct RootView: View {
     var body: some View {
         AlertTestMainView()
+    }
+}
+
+import SwiftData
+
+@MainActor
+final class DataStore {
+    static let shared = DataStore()
+
+    let container: ModelContainer
+    let context: ModelContext
+
+    private init() {
+        let schema = Schema([SampleAccount.self, Device.self, Account.self, GoalSetting.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        self.container = try! ModelContainer(for: schema, configurations: [config])
+        self.context = ModelContext(container)
     }
 }

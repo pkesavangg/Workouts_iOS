@@ -12,6 +12,7 @@ import Combine
 
 enum InputType {
     case text
+    case email
     case number
     case password
     case bankInput
@@ -283,6 +284,8 @@ struct AppInputField: View {
         switch config.inputType {
         case .number, .bankInput:
             return .numberPad
+        case .email:
+            return .emailAddress
         default:
             return .default
         }
@@ -404,7 +407,7 @@ struct TextInputFieldTestingView: View {
                         config: TextInputConfig(
                             label: "Username",
                             placeholder: "Enter your username",
-                            inputType: .text
+                            inputType: .email
                         ),
                         value: $text,
                         isFocused: .constant(false)

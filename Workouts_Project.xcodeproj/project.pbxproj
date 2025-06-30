@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D0ACC6002DF2DCE900D95F7D /* ReactiveForm in Frameworks */ = {isa = PBXBuildFile; productRef = D0ACC5FF2DF2DCE900D95F7D /* ReactiveForm */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		D02F5E5E2DE2D4B200E59912 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0ACC6002DF2DCE900D95F7D /* ReactiveForm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Workouts_Project;
 			packageProductDependencies = (
+				D0ACC5FF2DF2DCE900D95F7D /* ReactiveForm */,
 			);
 			productName = Workouts_Project;
 			productReference = D02F5E4E2DE2D4B100E59912 /* Workouts_Project.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = D02F5E452DE2D4B100E59912;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D0ACC5FE2DF2DCE900D95F7D /* XCRemoteSwiftPackageReference "ReactiveForm" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D02F5E4F2DE2D4B100E59912 /* Products */;
 			projectDirPath = "";
@@ -400,6 +409,9 @@
 				DEVELOPMENT_TEAM = FK46LLGFK4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "workout uses to enter the data in apple health";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "For testing purpose";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs location access to get Wi-Fi SSID";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -429,6 +441,9 @@
 				DEVELOPMENT_TEAM = FK46LLGFK4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "workout uses to enter the data in apple health";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "For testing purpose";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs location access to get Wi-Fi SSID";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -560,6 +575,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D0ACC5FE2DF2DCE900D95F7D /* XCRemoteSwiftPackageReference "ReactiveForm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hollyoops/ReactiveForm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D0ACC5FF2DF2DCE900D95F7D /* ReactiveForm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0ACC5FE2DF2DCE900D95F7D /* XCRemoteSwiftPackageReference "ReactiveForm" */;
+			productName = ReactiveForm;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D02F5E462DE2D4B100E59912 /* Project object */;
 }
