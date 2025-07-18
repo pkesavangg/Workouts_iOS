@@ -25,6 +25,7 @@ enum DashboardRoute: Routable {
             SettingScreen()
         case .homeDetail(let item):
             Text("Detail for item \(item)")
+            
         }
     }
 }
@@ -97,12 +98,22 @@ struct HomeScreen: View {
 }
 
 struct HistoryScreen: View {
+    @EnvironmentObject var router: Router<DashboardRoute>
     var body: some View {
-        Text("History Screen").font(.largeTitle)
-            .navigationBarHidden(true)
-            .onAppear {
-                print("History Screen appeared")
+        List(0..<100) { index in
+            Button {
+                router.navigate(to: .homeDetail(item: index))
+            } label: {
+                Text("History Item \(index)")
+                    .padding()
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(8)
             }
+        }
+        .navigationBarHidden(true)
+        .onAppear {
+            print("Home Screen appeared")
+        }
     }
 }
 
@@ -175,9 +186,11 @@ struct CustTabView: View {
     ]
 
     @State private var selectedTab: TabBarItem
-    @StateObject private var router = Router<DashboardRoute>()
+    @StateObject private var homeRouter = Router<DashboardRoute>()
+    @StateObject private var historyRouter = Router<DashboardRoute>()
+    @StateObject private var settingsRouter = Router<DashboardRoute>()
 
-    // Persisted views
+    // Persisted root views
     @State private var homeScreen = HomeScreen()
     @State private var historyScreen = HistoryScreen()
     @State private var settingsScreen = SettingScreen()
@@ -188,30 +201,31 @@ struct CustTabView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            RoutingView(stack: $router.stack) {
-                ZStack {
-                    homeScreen
-                        .environmentObject(router)
-                        .opacity(selectedTab.tag == 0 ? 1 : 0)
-                        .animation(.easeInOut, value: selectedTab.tag)
-
-                    historyScreen
-                        .opacity(selectedTab.tag == 1 ? 1 : 0)
-                        .animation(.easeInOut, value: selectedTab.tag)
-
-                    settingsScreen
-                        .opacity(selectedTab.tag == 2 ? 1 : 0)
-                        .animation(.easeInOut, value: selectedTab.tag)
+            // Home Tab
+            StatefulView(isVisible: selectedTab.tag == 0) {
+                RoutingView(stack: $homeRouter.stack) {
+                    homeScreen.environmentObject(homeRouter)
                 }
+                .environmentObject(homeRouter)
+            }
+
+            // History Tab
+            StatefulView(isVisible: selectedTab.tag == 1) {
+                RoutingView(stack: $historyRouter.stack) {
+                    historyScreen.environmentObject(historyRouter)
+                }
+                .environmentObject(historyRouter)
+            }
+
+            // Settings Tab (doesn't navigate deeper, but still wrapped for consistency)
+            StatefulView(isVisible: selectedTab.tag == 2) {
+                RoutingView(stack: $settingsRouter.stack) {
+                    settingsScreen.environmentObject(settingsRouter)
+                }
+                .environmentObject(settingsRouter)
             }
 
             TabBarView(selectedTab: $selectedTab, tabs: tabItems)
-                .onChange(of: selectedTab) { newValue in
-                    router.replace(with: [newValue.route])
-                }
-                .onAppear {
-                    router.navigate(to: .home)
-                }
         }
     }
 }
@@ -219,4 +233,19 @@ struct CustTabView: View {
 
 #Preview {
     CustTabView()
+}
+struct StatefulView<Content: View>: View {
+    let content: Content
+    var isVisible: Bool
+
+    init(isVisible: Bool, @ViewBuilder content: () -> Content) {
+        self.content = content()
+        self.isVisible = isVisible
+    }
+
+    var body: some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+    }
 }

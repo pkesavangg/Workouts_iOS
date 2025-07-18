@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D03DE49D2E20146F007C793D /* ScrollSpacerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03DE49C2E20146F007C793D /* ScrollSpacerView.swift */; };
 		D0ACC6002DF2DCE900D95F7D /* ReactiveForm in Frameworks */ = {isa = PBXBuildFile; productRef = D0ACC5FF2DF2DCE900D95F7D /* ReactiveForm */; };
 /* End PBXBuildFile section */
 
@@ -31,6 +32,7 @@
 		D02F5E4E2DE2D4B100E59912 /* Workouts_Project.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Workouts_Project.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D02F5E5D2DE2D4B200E59912 /* Workouts_ProjectTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Workouts_ProjectTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D02F5E672DE2D4B200E59912 /* Workouts_ProjectUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Workouts_ProjectUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D03DE49C2E20146F007C793D /* ScrollSpacerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollSpacerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,6 +82,7 @@
 		D02F5E452DE2D4B100E59912 = {
 			isa = PBXGroup;
 			children = (
+				D03DE49C2E20146F007C793D /* ScrollSpacerView.swift */,
 				D02F5E502DE2D4B100E59912 /* Workouts_Project */,
 				D02F5E602DE2D4B200E59912 /* Workouts_ProjectTests */,
 				D02F5E6A2DE2D4B200E59912 /* Workouts_ProjectUITests */,
@@ -245,6 +248,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D03DE49D2E20146F007C793D /* ScrollSpacerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
