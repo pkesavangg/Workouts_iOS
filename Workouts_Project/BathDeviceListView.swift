@@ -11,6 +11,7 @@ import SwiftData
 
 struct BathDeviceListView: View {
     @Query var devices: [BathDevice]
+    @Environment(\.modelContext) private var modelContext
     
     var body: some View {
         NavigationView {
@@ -36,10 +37,73 @@ struct BathDeviceListView: View {
                         }
                     }
                     .padding(.vertical, 8)
+                    // Swipe action to delete only the associated BathScale
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if device.bathScale != nil {
+                            Button(role: .destructive) {
+                                deleteScale(for: device)
+                            } label: {
+                                Label("Delete Scale", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .onDelete(perform: deleteDevices)
+            }
+            .navigationTitle("\(devices.count) Devices")
+            .toolbar {
+                Button(action: addRandomDevice) {
+                    Label("Add Device", systemImage: "plus")
                 }
             }
-            .navigationTitle("Devices")
         }
+    }
+
+    private func addRandomDevice() {
+        print("Adding a random device...")
+        let randomId = UUID().uuidString
+        let randomAccount = "user_\(Int.random(in: 1...999))"
+        let randomSKU: String? = Bool.random() ? "SKU\(Int.random(in: 1000...9999))" : nil
+        let randomMac: String? = Bool.random() ? (0..<6).map { _ in String(format: "%02X", Int.random(in: 0...255)) }.joined(separator: ":") : nil
+        let randomProtocol: String? = ["r1", "r2", "r3", "r4"].randomElement()
+
+        let randomScale: BathScale? = Bool.random() ? BathScale(scaleType: ["Bluetooth", "WiFi"].randomElement(), bodyComp: Bool.random()) : nil
+
+        let newDevice = BathDevice(id: randomId,
+                                   accountId: randomAccount,
+                                   sku: randomSKU,
+                                   mac: randomMac,
+                                   protocolType: randomProtocol,
+                                   bathScale: randomScale)
+
+        withAnimation {
+            modelContext.insert(newDevice)
+        }
+
+        try? modelContext.save()
+    }
+
+    private func deleteDevices(at offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                modelContext.delete(devices[index])
+            }
+        }
+
+        try? modelContext.save()
+    }
+
+    // MARK: - Delete only BathScale from a specific device
+    private func deleteScale(for device: BathDevice) {
+        guard let scale = device.bathScale else { return }
+
+        withAnimation {
+            // Break the relationship first, then remove the scale from the context
+            device.bathScale = nil
+            modelContext.delete(scale)
+        }
+
+        try? modelContext.save()
     }
 }
 
@@ -82,7 +146,7 @@ extension BathScale: @unchecked Sendable {}
 
 
 #Preview {
-    let container = try! ModelContainer(for: Device.self, BathScale.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let container = try! ModelContainer(for: BathDevice.self, BathScale.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
 
     // Create sample data
     let sampleScale = BathScale(scaleType: "Bluetooth", bodyComp: true)

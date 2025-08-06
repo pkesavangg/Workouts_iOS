@@ -13,10 +13,10 @@ struct Workouts_ProjectApp: App {
     var body: some Scene {
         WindowGroup {
             VStack {
-                GifLoadingView()
+                UserView()
             }
         }
-        .modelContainer(for: [Account.self, GoalSetting.self])
+        .modelContainer(for: [Account.self, GoalSetting.self, BathDevice.self, BathScale.self, SampleAccount.self])
     }
 }
 
