@@ -16,7 +16,7 @@ struct Workouts_ProjectApp: App {
                 UserView()
             }
         }
-        .modelContainer(for: [Account.self, GoalSetting.self, BathDevice.self, BathScale.self, SampleAccount.self])
+        .modelContainer(for: [Account.self, GoalSetting.self, BathDevice.self, BathScale.self, SampleAccount.self, UserData.self])
     }
 }
 
@@ -28,7 +28,6 @@ struct RootView: View {
 
 import SwiftData
 
-@MainActor
 final class DataStore {
     static let shared = DataStore()
 
@@ -36,7 +35,7 @@ final class DataStore {
     let context: ModelContext
 
     private init() {
-        let schema = Schema([SampleAccount.self, Device.self, Account.self, GoalSetting.self])
+        let schema = Schema([SampleAccount.self, Device.self, Account.self, GoalSetting.self, UserData.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         self.container = try! ModelContainer(for: schema, configurations: [config])
         self.context = ModelContext(container)
