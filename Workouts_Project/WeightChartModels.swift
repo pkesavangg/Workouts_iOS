@@ -169,8 +169,19 @@ class WeightChartDataManager {
         #endif
     }
     
-    /// Converts WeightEntry array to chart points with caching for performance
-    static func convertToChartPoints(_ entries: [WeightEntry]) -> [WeightChartPoint] {
+    /// Converts WeightEntry array to chart points with aggregation for month/year/total periods
+    static func convertToChartPoints(_ entries: [WeightEntry], for period: TimePeriod = .week) -> [WeightChartPoint] {
+        // For week view, show individual entries
+        if period == .week {
+            return convertToIndividualChartPoints(entries)
+        } else {
+            // For month, year, and total views, aggregate by month
+            return convertToAggregatedChartPoints(entries)
+        }
+    }
+    
+    /// Converts WeightEntry array to individual chart points (for week view)
+    private static func convertToIndividualChartPoints(_ entries: [WeightEntry]) -> [WeightChartPoint] {
         // Only keep essential logging
         #if DEBUG
         if entries.count > 100 {
@@ -233,6 +244,90 @@ class WeightChartDataManager {
         #endif
         
         return filteredChartPoints
+    }
+    
+    /// Converts WeightEntry array to aggregated monthly chart points (for month/total views)
+    private static func convertToAggregatedChartPoints(_ entries: [WeightEntry]) -> [WeightChartPoint] {
+        #if DEBUG
+        print("🗓️ Converting to monthly aggregated chart points...")
+        #endif
+        
+        // Filter valid entries
+        let validEntries = entries.filter { entry in
+            entry.isCreateOperation && entry.weight > 0
+        }
+        
+        // Group entries by month-year
+        var monthlyGroups: [String: [WeightEntry]] = [:]
+        let monthFormatter = DateFormatter()
+        monthFormatter.dateFormat = "yyyy-MM"
+        monthFormatter.timeZone = TimeZone(abbreviation: "UTC")
+        
+        for entry in validEntries {
+            if let date = parseEntryDate(entry.entryTimestamp) {
+                let monthKey = monthFormatter.string(from: date)
+                monthlyGroups[monthKey, default: []].append(entry)
+            }
+        }
+        
+        // Create aggregated chart points for each month
+        var aggregatedPoints: [WeightChartPoint] = []
+        
+        for (monthKey, monthEntries) in monthlyGroups {
+            guard !monthEntries.isEmpty else { continue }
+            
+            // Calculate average weight for the month
+            let totalWeight = monthEntries.reduce(0) { $0 + $1.weight }
+            let averageWeight = Double(totalWeight) / Double(monthEntries.count)
+            
+            // Use the start date of the month for proper x-axis alignment
+            if let monthDate = monthFormatter.date(from: monthKey) {
+                let calendar = Calendar.current
+                let startOfMonth = calendar.dateInterval(of: .month, for: monthDate)?.start ?? monthDate
+                
+                // Create a representative entry for the month
+                let firstEntry = monthEntries[0]
+                let aggregatedEntry = WeightEntry(
+                    operationType: "create",
+                    entryTimestamp: ISO8601DateFormatter().string(from: startOfMonth),
+                    serverTimestamp: "",
+                    weight: Int(averageWeight),
+                    bodyFat: nil,
+                    muscleMass: nil,
+                    boneMass: nil,
+                    water: nil,
+                    source: "aggregated",
+                    bmi: monthEntries.compactMap { $0.bmi }.first,
+                    impedance: nil,
+                    pulse: nil,
+                    unit: firstEntry.unit,
+                    visceralFatLevel: nil,
+                    subcutaneousFatPercent: nil,
+                    proteinPercent: nil,
+                    skeletalMusclePercent: nil,
+                    bmr: nil,
+                    metabolicAge: nil
+                )
+                
+                let chartPoint = WeightChartPoint(from: aggregatedEntry, fallbackDate: startOfMonth)
+                aggregatedPoints.append(chartPoint)
+                
+                #if DEBUG
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "MMM d, yyyy"
+                print("📊 Month \(monthKey): \(monthEntries.count) entries → avg \(String(format: "%.1f", averageWeight / 100.0)) \(firstEntry.unit ?? "kg") at \(dateFormatter.string(from: startOfMonth))")
+                #endif
+            }
+        }
+        
+        // Sort by date
+        let sortedPoints = aggregatedPoints.sorted { $0.date < $1.date }
+        
+        #if DEBUG
+        print("📊 Created \(sortedPoints.count) monthly aggregated points from \(validEntries.count) entries")
+        #endif
+        
+        return sortedPoints
     }
     
     /// Filter outliers to improve chart appearance and remove obvious data errors

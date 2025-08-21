@@ -31,8 +31,8 @@ struct WeightChartView: View {
             return cachedChartPoints
         }
         
-        // Recalculate and cache
-        let newPoints = WeightChartDataManager.convertToChartPoints(filteredEntries)
+        // Recalculate and cache with period-specific aggregation
+        let newPoints = WeightChartDataManager.convertToChartPoints(filteredEntries, for: selectedPeriod)
         
         // Update cache on next frame to avoid view update during body computation
         DispatchQueue.main.async {
