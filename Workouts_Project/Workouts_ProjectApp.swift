@@ -12,9 +12,7 @@ import SwiftData
 struct Workouts_ProjectApp: App {
     var body: some Scene {
         WindowGroup {
-            VStack {
-                UserView()
-            }
+            ContentView()
         }
         .modelContainer(for: [Account.self, GoalSetting.self, BathDevice.self, BathScale.self, SampleAccount.self, UserData.self])
     }

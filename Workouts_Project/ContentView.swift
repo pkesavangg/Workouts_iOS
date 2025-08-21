@@ -262,3 +262,10 @@ struct ReactiveFormTestingView: View {
 //    ContentView()
 //        .modelContainer(for: OperationEntry.self, inMemory: true)
 //}
+
+struct ContentView: View {
+    var body: some View {
+        WeightEntriesListView()
+            .navigationViewStyle(.stack)
+    }
+}

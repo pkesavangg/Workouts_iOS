@@ -49,5 +49,46 @@ struct ScrollSpacerView: View {
 
 
 #Preview {
-    ScrollSpacerView()
+    HalfSheetExampleContentView()
 }
+import SwiftUI
+
+struct HalfSheetExampleContentView: View {
+    @State private var showSheet = false
+    @State private var selectedDetent: PresentationDetent = .medium
+
+    var body: some View {
+        Button("Show half sheet") { showSheet = true }
+            .sheet(isPresented: $showSheet) {
+                HalfSheetExample()
+                    .presentationDetents([.height(320)]) // Use fixed height
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+                    .interactiveDismissDisabled(false)
+            }
+
+
+    }
+}
+struct HalfSheetExample: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Half Sheet on iPad")
+                .font(.title2).bold()
+
+            Text("Fixed height: 320")
+
+            ScrollView {
+                ForEach(0..<10) { i in
+                    RoundedRectangle(cornerRadius: 12)
+                        .frame(height: 40)
+                        .overlay(Text("Row \(i)"))
+                        .padding(.horizontal)
+                }
+            }
+            .frame(maxHeight: 200) // ⬅️ This is key
+        }
+        .padding()
+    }
+}
+

@@ -14,6 +14,11 @@ struct MainView: View {
                     Label("Menu", systemImage: "list.dash")
                 }
             
+            WeightEntriesListView()
+                .tabItem {
+                    Label("Weight Entries", systemImage: "scale.3d")
+                }
+            
             OrderView()
                 .tabItem {
                     Label("Order", systemImage: "square.and.pencil")
