@@ -207,10 +207,25 @@ class WeightChartDataManager {
         }
         #endif
         
-        // Filter valid entries (only create operations with valid weight)
-        let validEntries = entries.filter { entry in
-            entry.isCreateOperation && entry.weight > 0
+        // First identify deleted timestamps
+        var deletedTimestamps: Set<String> = []
+        for entry in entries where entry.isDeleteOperation {
+            deletedTimestamps.insert(entry.entryTimestamp)
         }
+        
+        // Filter valid entries (only create operations with valid weight that haven't been deleted)
+        let validEntries = entries.filter { entry in
+            entry.isCreateOperation && 
+            entry.weight > 0 &&
+            !deletedTimestamps.contains(entry.entryTimestamp)
+        }
+        
+        #if DEBUG
+        let deletedCount = entries.filter { $0.isCreateOperation && deletedTimestamps.contains($0.entryTimestamp) }.count
+        if deletedCount > 0 {
+            print("🗑️ Filtered out \(deletedCount) deleted entries")
+        }
+        #endif
         
         #if DEBUG
         print("📊 Raw weight data analysis:")
@@ -270,10 +285,25 @@ class WeightChartDataManager {
         print("🗓️ Converting to monthly aggregated chart points...")
         #endif
         
-        // Filter valid entries
-        let validEntries = entries.filter { entry in
-            entry.isCreateOperation && entry.weight > 0
+        // First identify deleted timestamps
+        var deletedTimestamps: Set<String> = []
+        for entry in entries where entry.isDeleteOperation {
+            deletedTimestamps.insert(entry.entryTimestamp)
         }
+        
+        // Filter valid entries (only create operations with valid weight that haven't been deleted)
+        let validEntries = entries.filter { entry in
+            entry.isCreateOperation && 
+            entry.weight > 0 &&
+            !deletedTimestamps.contains(entry.entryTimestamp)
+        }
+        
+        #if DEBUG
+        let deletedCount = entries.filter { $0.isCreateOperation && deletedTimestamps.contains($0.entryTimestamp) }.count
+        if deletedCount > 0 {
+            print("🗑️ Filtered out \(deletedCount) deleted entries from monthly aggregation")
+        }
+        #endif
         
         // Group entries by month-year
         var monthlyGroups: [String: [WeightEntry]] = [:]

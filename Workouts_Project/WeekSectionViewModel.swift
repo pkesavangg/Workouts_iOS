@@ -105,12 +105,29 @@ class WeekSectionViewModel: ObservableObject {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         
-        // Group entries by day (ignoring time component) in a single pass
+        // First, group entries by their timestamp to identify deleted entries
+        var entriesByTimestamp: [String: [WeightEntry]] = [:]
+        for entry in entries {
+            if entriesByTimestamp[entry.entryTimestamp] == nil {
+                entriesByTimestamp[entry.entryTimestamp] = []
+            }
+            entriesByTimestamp[entry.entryTimestamp]!.append(entry)
+        }
+        
+        // Group valid entries by day (ignoring time component) in a single pass
         var latestEntryByDay: [String: (entry: WeightEntry, date: Date)] = [:]
         
-        for entry in entries {
-            // Only process create operations to save memory
-            guard entry.isCreateOperation else { continue }
+        for (timestamp, entriesGroup) in entriesByTimestamp {
+            // Skip timestamps that have delete operations
+            if entriesGroup.contains(where: { $0.isDeleteOperation }) {
+                #if DEBUG
+                print("🗑️ Skipping deleted entry with timestamp: \(timestamp)")
+                #endif
+                continue
+            }
+            
+            // Find the create operation for this timestamp
+            guard let entry = entriesGroup.first(where: { $0.isCreateOperation }) else { continue }
             
             // Parse date using the robust parser
             guard let date = WeightChartDataManager.parseEntryDate(entry.entryTimestamp) else {

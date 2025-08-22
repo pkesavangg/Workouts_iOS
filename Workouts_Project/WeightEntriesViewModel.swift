@@ -16,8 +16,8 @@ final class WeightEntriesViewModel: ObservableObject {
     @Published var isLoggedIn = false
     
     private var accessToken: String?
-    private let loginEmail = "pkesavan@greatergoods.com"
-    private let loginPassword = "1234567"
+    private let loginEmail = "testggac123@gmail.com"
+    private let loginPassword = "123456"
     
     // MARK: - Login
     func login() async {
@@ -87,20 +87,41 @@ final class WeightEntriesViewModel: ObservableObject {
             
             let entriesResponse = try JSONDecoder().decode(EntriesResponse.self, from: data)
             
-            // Filter and sort entries - show only create operations, most recent first
-            let createEntries = entriesResponse.operations
-                .filter { $0.isCreateOperation }
-                .sorted { e1, e2 in
-                    let d1 = iso8601WithMillis.date(from: e1.entryTimestamp) ?? .distantPast
-                    let d2 = iso8601WithMillis.date(from: e2.entryTimestamp) ?? .distantPast
-                    return d1 > d2            // newest first
+            // Step 1: Group entries by their entryTimestamp
+            var entriesByTimestamp: [String: [WeightEntry]] = [:]
+            entriesResponse.operations.forEach { entry in
+                if entriesByTimestamp[entry.entryTimestamp] == nil {
+                    entriesByTimestamp[entry.entryTimestamp] = []
                 }
+                entriesByTimestamp[entry.entryTimestamp]!.append(entry)
+            }
+            
+            // Step 2: Filter out timestamps that have delete operations
+            var validEntries: [WeightEntry] = []
+            for (_, entriesGroup) in entriesByTimestamp {
+                // Check if any entry for this timestamp has a delete operation
+                let hasDeleteOperation = entriesGroup.contains { $0.operationType == "delete" }
+                
+                // If no delete operation exists, find the create operation (if any)
+                if !hasDeleteOperation {
+                    if let createEntry = entriesGroup.first(where: { $0.isCreateOperation }) {
+                        validEntries.append(createEntry)
+                    }
+                }
+            }
+            
+            // Step 3: Sort entries - most recent first
+            let sortedEntries = validEntries.sorted { e1, e2 in
+                let d1 = iso8601WithMillis.date(from: e1.entryTimestamp) ?? .distantPast
+                let d2 = iso8601WithMillis.date(from: e2.entryTimestamp) ?? .distantPast
+                return d1 > d2            // newest first
+            }
 
-            self.entries = createEntries
+            self.entries = sortedEntries
             
             #if DEBUG
-            print("✅ Fetched \(createEntries.count) weight entries")
-            print("First entry: \(createEntries.first?.entryTimestamp ?? "none")")
+//            print("✅ Fetched \(createEntries.count) weight entries")
+//            print("First entry: \(createEntries.first?.entryTimestamp ?? "none")")
             #endif
             
             print("Fetched \(self.entries.count) valid entries")

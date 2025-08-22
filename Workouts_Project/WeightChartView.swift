@@ -209,10 +209,18 @@ struct WeightChartView: View {
                                     .font(.system(size: 9))
                             }
                             AxisTick()
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
                         }
                     }
                 }
                 .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
+                .chartYAxis {
+                    AxisMarks(position: .trailing) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                        AxisTick()
+                        AxisValueLabel()
+                    }
+                }
                 .chartScrollableAxes(.horizontal)
                 .chartXVisibleDomain(length: viewModel.visibleDomainLength)
                 .chartScrollPosition(x: $viewModel.scrollPosition)
