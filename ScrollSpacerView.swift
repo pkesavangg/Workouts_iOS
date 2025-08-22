@@ -7,88 +7,104 @@
 
 import SwiftUI
 
-import SwiftUI
-
+/// A utility view that helps ensure proper spacing in ScrollViews
+/// This is particularly useful for weight chart views to maintain proper padding at bottom
 struct ScrollSpacerView: View {
-    @State var text: String = "Hello, World!"
+    /// The minimum amount of space to add at the bottom
+    var minHeight: CGFloat = 80
+    
+    /// Additional spacing beyond the minimum
+    var additionalSpacing: CGFloat = 0
+    
+    /// Whether to show a visual indicator for debugging
+    var showDebugColor: Bool = false
+    
+    var body: some View {
+        Rectangle()
+            .foregroundColor(showDebugColor ? .red.opacity(0.15) : .clear)
+            .frame(height: minHeight + additionalSpacing)
+    }
+}
 
+/// A view that demonstrates how to use the ScrollSpacerView
+struct ScrollSpacerDemoView: View {
+    @State private var showSheet = false
+    
     var body: some View {
         VStack {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Hello, World!")
+            Button("Show Chart Sheet") { 
+                showSheet = true 
+            }
+            .buttonStyle(.borderedProminent)
+            
+            ScrollView {
+                VStack(spacing: 16) {
+                    ForEach(0..<5) { i in
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.1))
+                            .frame(height: 60)
+                            .overlay(
+                                Text("Content \(i)")
+                                    .foregroundColor(.blue)
+                            )
+                    }
+                    
+                    // Add the spacer view at the bottom
+                    ScrollSpacerView(minHeight: 100, showDebugColor: true)
+                }
+                .padding()
+            }
+        }
+        .sheet(isPresented: $showSheet) {
+            WeightChartSheetView()
+                .presentationDetents([.height(500)])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
 
-                    VStack(spacing: 24) {
-                        ForEach(0..<6) { _ in
-                            TextField("Type something", text: $text)
-                                .textFieldStyle(.roundedBorder)
+/// Example sheet view that shows how to use ScrollSpacerView with a chart
+struct WeightChartSheetView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Weight Chart")
+                .font(.headline)
+            
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Chart or other content would go here
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.blue.opacity(0.1))
+                        .frame(height: 250)
+                        .overlay(
+                            Text("Chart Placeholder")
+                                .foregroundColor(.blue)
+                        )
+                    
+                    // Information below the chart
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(0..<3) { i in
+                            HStack {
+                                Text("Stat \(i):")
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Text("Value \(i)")
+                                    .foregroundColor(.secondary)
+                            }
+                            Divider()
                         }
                     }
-                    .padding(.top)
-
-                    Spacer(minLength: 0)
-
-                    VStack(spacing: 4) {
-                        Text("Footer content")
-                            .font(.headline)
-                        Text("This is a scrollable view with a spacer at the bottom.")
-                            .multilineTextAlignment(.leading)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 32)
+                    
+                    // Add spacer at the bottom for better scrolling
+                    ScrollSpacerView(minHeight: 50)
                 }
-                .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.red.opacity(0.5))
-                .frame(minHeight: UIScreen.main.bounds.height) // Makes sure the view fills the screen
             }
         }
-        .background(Color.red.opacity(0.5).ignoresSafeArea())
     }
 }
-
 
 #Preview {
-    HalfSheetExampleContentView()
-}
-import SwiftUI
-
-struct HalfSheetExampleContentView: View {
-    @State private var showSheet = false
-    @State private var selectedDetent: PresentationDetent = .medium
-
-    var body: some View {
-        Button("Show half sheet") { showSheet = true }
-            .sheet(isPresented: $showSheet) {
-                HalfSheetExample()
-                    .presentationDetents([.height(320)]) // Use fixed height
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(24)
-                    .interactiveDismissDisabled(false)
-            }
-
-
-    }
-}
-struct HalfSheetExample: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("Half Sheet on iPad")
-                .font(.title2).bold()
-
-            Text("Fixed height: 320")
-
-            ScrollView {
-                ForEach(0..<10) { i in
-                    RoundedRectangle(cornerRadius: 12)
-                        .frame(height: 40)
-                        .overlay(Text("Row \(i)"))
-                        .padding(.horizontal)
-                }
-            }
-            .frame(maxHeight: 200) // ⬅️ This is key
-        }
-        .padding()
-    }
+    ScrollSpacerDemoView()
 }
 

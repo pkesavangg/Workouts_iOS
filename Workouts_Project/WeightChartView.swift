@@ -10,16 +10,37 @@ import Charts
 
 struct WeightChartView: View {
     let entries: [WeightEntry]
-    @StateObject private var viewModel = WeekSectionViewModel()
+    @StateObject private var weekViewModel = WeekSectionViewModel()
+    @StateObject private var monthViewModel = MonthSectionViewModel()
+    @StateObject private var yearViewModel = YearSectionViewModel()
     @State private var selectedTimePeriod: TimePeriod = .week
     
     private var hasData: Bool {
-        !viewModel.chartPoints.isEmpty
+        switch selectedTimePeriod {
+        case .week:
+            return !weekViewModel.chartPoints.isEmpty
+        case .month:
+            return !monthViewModel.chartPoints.isEmpty
+        case .year:
+            return !yearViewModel.chartPoints.isEmpty
+        case .total:
+            // For total view, use year view model data (monthly averages)
+            return !yearViewModel.chartPoints.isEmpty
+        }
     }
     
     // Debug computed property to check data flow
     private var debugInfo: String {
-        return "Total entries: \(entries.count), Chart points: \(viewModel.chartPoints.count)"
+        switch selectedTimePeriod {
+        case .week:
+            return "Total entries: \(entries.count), Week chart points: \(weekViewModel.chartPoints.count)"
+        case .month:
+            return "Total entries: \(entries.count), Month chart points: \(monthViewModel.chartPoints.count)"
+        case .year:
+            return "Total entries: \(entries.count), Year chart points: \(yearViewModel.chartPoints.count)"
+        case .total:
+            return "Total entries: \(entries.count), Total chart points: \(yearViewModel.chartPoints.count)"
+        }
     }
     
     var body: some View {
@@ -43,15 +64,19 @@ struct WeightChartView: View {
             }
         }
         .onAppear {
-            // Process entries once on appear
+            // Process entries for all view models on appear
             DispatchQueue.main.async {
-                viewModel.processEntries(entries)
+                weekViewModel.processEntries(entries)
+                monthViewModel.processEntries(entries)
+                yearViewModel.processEntries(entries)
             }
         }
         .onChange(of: entries) { _, newEntries in
             // Process entries asynchronously to avoid UI blocking
             DispatchQueue.main.async {
-                viewModel.processEntries(newEntries)
+                weekViewModel.processEntries(newEntries)
+                monthViewModel.processEntries(newEntries)
+                yearViewModel.processEntries(newEntries)
             }
         }
         .onChange(of: selectedTimePeriod) { _, newPeriod in
@@ -59,16 +84,29 @@ struct WeightChartView: View {
             print("Changed time period to: \(newPeriod.displayName)")
             #endif
             
-            // We only need to process entries for the week view for now
-            // In the future, you'll use different viewModels for each time period
-            if newPeriod == .week {
-                viewModel.processEntries(entries)
+            // Only process entries if the chart points are empty
+            // This preserves scroll position when switching between time periods
+            DispatchQueue.main.async {
+                switch newPeriod {
+                case .week:
+                    if weekViewModel.chartPoints.isEmpty {
+                        weekViewModel.processEntries(entries)
+                    }
+                case .month:
+                    if monthViewModel.chartPoints.isEmpty {
+                        monthViewModel.processEntries(entries)
+                    }
+                case .year:
+                    if yearViewModel.chartPoints.isEmpty {
+                        yearViewModel.processEntries(entries)
+                    }
+                case .total:
+                    // Use year view model for total view (monthly averages)
+                    if yearViewModel.chartPoints.isEmpty {
+                        yearViewModel.processEntries(entries)
+                    }
+                }
             }
-            // When you implement other views, you'll add more cases here
-            // Example:
-            // case .month: monthViewModel.processEntries(entries)
-            // case .year: yearViewModel.processEntries(entries)
-            // case .total: totalViewModel.processEntries(entries)
         }
     }
     
@@ -76,29 +114,102 @@ struct WeightChartView: View {
     @ViewBuilder
     private var weightInfoSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(viewModel.weightDisplayLabel())
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+            // Display label based on selected time period
+            Group {
+                switch selectedTimePeriod {
+                case .week:
+                    Text(weekViewModel.weightDisplayLabel())
+                case .month:
+                    Text(monthViewModel.weightDisplayLabel())
+                case .year:
+                    Text(yearViewModel.weightDisplayLabel())
+                case .total:
+                    // For total, use year view model (monthly averages)
+                    Text("All-Time Overview")
+                }
+            }
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+            .padding(.horizontal)
             
             HStack {
-                Text(viewModel.weightDisplayValue())
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
+                // Display weight value based on selected time period
+                Group {
+                    switch selectedTimePeriod {
+                    case .week:
+                        Text(weekViewModel.weightDisplayValue())
+                    case .month:
+                        Text(monthViewModel.weightDisplayValue())
+                    case .year:
+                        Text(yearViewModel.weightDisplayValue())
+                    case .total:
+                        // For total, use year view model (monthly averages)
+                        Text(yearViewModel.weightDisplayValue())
+                    }
+                }
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
                 
                 Spacer()
                 
-                if let selectedPoint = viewModel.selectedPoint {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(viewModel.formatDate(selectedPoint.date))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        if let bmi = selectedPoint.originalEntry.bmi {
-                            Text("BMI: \(String(format: "%.1f", bmi / 10.0))")
+                // Display selected point details based on selected time period
+                switch selectedTimePeriod {
+                case .week:
+                    if let selectedPoint = weekViewModel.selectedPoint {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(weekViewModel.formatDate(selectedPoint.date))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                            
+                            if let bmi = selectedPoint.originalEntry.bmi {
+                                Text("BMI: \(String(format: "%.1f", bmi / 10.0))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                case .month:
+                    if let selectedPoint = monthViewModel.selectedPoint {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(monthViewModel.formatDate(selectedPoint.date))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            if let bmi = selectedPoint.originalEntry.bmi {
+                                Text("BMI: \(String(format: "%.1f", bmi / 10.0))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                case .year:
+                    if let selectedPoint = yearViewModel.selectedPoint {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(yearViewModel.formatDate(selectedPoint.date))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            if let bmi = selectedPoint.originalEntry.bmi {
+                                Text("BMI: \(String(format: "%.1f", bmi / 10.0))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                case .total:
+                    // For total, use year view model (monthly averages)
+                    if let selectedPoint = yearViewModel.selectedPoint {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(yearViewModel.formatDate(selectedPoint.date))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            if let bmi = selectedPoint.originalEntry.bmi {
+                                Text("BMI: \(String(format: "%.1f", bmi / 10.0))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
@@ -111,9 +222,18 @@ struct WeightChartView: View {
     
     // MARK: - Chart Helper Methods
     
-    /// Returns whether a point is the currently selected point
+    /// Returns whether a point is the currently selected point based on time period
     private func isPointSelected(_ point: WeightChartPoint) -> Bool {
-        return viewModel.selectedPoint?.id == point.id
+        switch selectedTimePeriod {
+        case .week:
+            return weekViewModel.selectedPoint?.id == point.id
+        case .month:
+            return monthViewModel.selectedPoint?.id == point.id
+        case .year:
+            return yearViewModel.selectedPoint?.id == point.id
+        case .total:
+            return yearViewModel.selectedPoint?.id == point.id
+        }
     }
     
     /// Returns the symbol size for a point based on selection state
@@ -123,17 +243,35 @@ struct WeightChartView: View {
     
     // Custom axis value label view - kept for reference but no longer used directly
     private func createAxisLabel(for date: Date) -> some View {
-        Text(viewModel.formatWeekday(date))
-            .font(.system(size: 9, weight: .medium))
-            .fixedSize()
-            .allowsHitTesting(false)
+        switch selectedTimePeriod {
+        case .week:
+            return Text(weekViewModel.formatWeekday(date))
+                .font(.system(size: 9, weight: .medium))
+                .fixedSize()
+                .allowsHitTesting(false)
+        case .month:
+            return Text(monthViewModel.formatWeekday(date))
+                .font(.system(size: 9, weight: .medium))
+                .fixedSize()
+                .allowsHitTesting(false)
+        case .year:
+            return Text(yearViewModel.formatMonthSingleLetter(date))
+                .font(.system(size: 9, weight: .medium))
+                .fixedSize()
+                .allowsHitTesting(false)
+        case .total:
+            return Text(yearViewModel.formatMonth(date))
+                .font(.system(size: 9, weight: .medium))
+                .fixedSize()
+                .allowsHitTesting(false)
+        }
     }
     
     // MARK: - Chart Components
     
-    // Line marks component
+    // Line marks component for week view
     private var lineMarks: some ChartContent {
-        ForEach(viewModel.chartPoints) { point in
+        ForEach(weekViewModel.chartPoints) { point in
             LineMark(
                 x: .value("Date", point.date),
                 y: .value("Weight", point.weight)
@@ -144,21 +282,21 @@ struct WeightChartView: View {
         }
     }
     
-    // Point marks component
+    // Point marks component for week view
     private var pointMarks: some ChartContent {
-        ForEach(viewModel.getVisiblePoints()) { point in
+        ForEach(weekViewModel.getVisiblePoints()) { point in
             PointMark(
                 x: .value("Date", point.date),
                 y: .value("Weight", point.weight)
             )
             .foregroundStyle(.blue)
-            .symbolSize(viewModel.selectedPoint?.id == point.id ? 80 : 40)
+            .symbolSize(weekViewModel.selectedPoint?.id == point.id ? 80 : 40)
         }
     }
     
-    // Selection indicator component - simplified without using Group
+    // Selection indicator component for week view
     private var selectionMark: some ChartContent {
-        let selectedDate = viewModel.selectedDate
+        let selectedDate = weekViewModel.selectedDate
         // Return the mark directly, it will only be visible if there's a selection
         return RuleMark(x: .value("Selected Date", selectedDate ?? Date()))
             .foregroundStyle(selectedDate != nil ? .gray.opacity(0.5) : .clear)
@@ -167,12 +305,12 @@ struct WeightChartView: View {
             .zIndex(100)
     }
     
-    // Custom X axis component
+    // Custom X axis component for week view
     private var customXAxis: some AxisContent {
         AxisMarks(position: .bottom, values: .stride(by: .day)) { value in
             if let date = value.as(Date.self) {
                 AxisValueLabel {
-                    Text(viewModel.formatWeekday(date))
+                    Text(weekViewModel.formatWeekday(date))
                         .font(.system(size: 9, weight: .medium))
                         .fixedSize()
                 }
@@ -193,11 +331,11 @@ struct WeightChartView: View {
                 case .week:
                     weekChartView
                 case .month:
-                    monthChartPlaceholderView
+                    monthChartView
                 case .year:
-                    yearChartPlaceholderView
+                    yearChartView
                 case .total:
-                    totalChartPlaceholderView
+                    totalChartView
                 }
             }
             .frame(height: 200)
@@ -215,7 +353,7 @@ struct WeightChartView: View {
             // Week chart
             Chart {
                 // Line for all points
-                ForEach(viewModel.chartPoints) { point in
+                ForEach(weekViewModel.chartPoints) { point in
                     LineMark(
                         x: .value("Date", point.date),
                         y: .value("Weight", point.weight)
@@ -225,17 +363,17 @@ struct WeightChartView: View {
                 }
                 
                 // Only visible points
-                ForEach(viewModel.getVisiblePoints()) { point in
+                ForEach(weekViewModel.getVisiblePoints()) { point in
                     PointMark(
                         x: .value("Date", point.date),
                         y: .value("Weight", point.weight)
                     )
                     .foregroundStyle(.blue)
-                    .symbolSize(viewModel.selectedPoint?.id == point.id ? 80 : 40)
+                    .symbolSize(weekViewModel.selectedPoint?.id == point.id ? 80 : 40)
                 }
                 
                 // Selection indicator - directly included for simplicity
-                if let selectedDate = viewModel.selectedDate {
+                if let selectedDate = weekViewModel.selectedDate {
                     RuleMark(x: .value("Selected Date", selectedDate))
                         .foregroundStyle(.gray.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
@@ -246,7 +384,7 @@ struct WeightChartView: View {
                 AxisMarks(values: .stride(by: .day)) { value in
                     if let date = value.as(Date.self) {
                         AxisValueLabel {
-                            Text(viewModel.formatWeekday(date))
+                            Text(weekViewModel.formatWeekday(date))
                                 .font(.system(size: 9))
                         }
                         AxisTick()
@@ -254,7 +392,7 @@ struct WeightChartView: View {
                     }
                 }
             }
-            .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
+            .chartYScale(domain: weekViewModel.weightRange.min...weekViewModel.weightRange.max)
             .chartYAxis {
                 AxisMarks(position: .trailing) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
@@ -263,33 +401,274 @@ struct WeightChartView: View {
                 }
             }
             .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: viewModel.visibleDomainLength)
-            .chartScrollPosition(x: $viewModel.scrollPosition)
+            .chartXVisibleDomain(length: weekViewModel.visibleDomainLength)
+            .chartScrollPosition(x: $weekViewModel.scrollPosition)
             .chartXSelection(value: Binding(
-                get: { viewModel.selectedDate },
-                set: { viewModel.selectPointAtDate($0) }
+                get: { weekViewModel.selectedDate },
+                set: { weekViewModel.selectPointAtDate($0) }
             ))
             .chartLegend(.hidden)
             .frame(width: geometry.size.width)
         }
     }
     
-    // MARK: - Month Chart Placeholder
-    @ViewBuilder
-    private var monthChartPlaceholderView: some View {
-        placeholderView(for: .month)
+    // MARK: - Month Chart View Components
+    
+    // Month chart line marks
+    private var monthLineMarks: some ChartContent {
+        ForEach(monthViewModel.chartPoints) { point in
+            LineMark(
+                x: .value("Date", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+            .foregroundStyle(.blue)
+        }
     }
     
-    // MARK: - Year Chart Placeholder
-    @ViewBuilder
-    private var yearChartPlaceholderView: some View {
-        placeholderView(for: .year)
+    // Month chart point marks - only show points that are visible
+    private var monthPointMarks: some ChartContent {
+        ForEach(monthViewModel.getVisiblePoints()) { point in
+            PointMark(
+                x: .value("Date", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .foregroundStyle(.blue)
+            .symbolSize(monthViewModel.selectedPoint?.id == point.id ? 80 : 40)
+        }
     }
     
-    // MARK: - Total Chart Placeholder
+    // Month chart selection indicator
+    private var monthSelectionMark: some ChartContent {
+        let selectedDate = monthViewModel.selectedDate
+        
+        // Use a RuleMark with conditional styling - use transparent color when no selection
+        return RuleMark(x: .value("Selected Date", selectedDate ?? Date()))
+            .foregroundStyle(selectedDate != nil ? .gray.opacity(0.5) : .clear)
+            .opacity(selectedDate != nil ? 1.0 : 0.0)
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .zIndex(100)
+    }
+    
+    // Month chart X axis configuration
+    private var monthXAxis: some AxisContent {
+        // Use explicit dates for weekly intervals instead of .weekOfMonth
+        // This avoids the "Component is not supported" crash
+        let weekInSeconds: TimeInterval = 7 * 24 * 60 * 60 // 7 days in seconds as TimeInterval (Double)
+        
+        return AxisMarks(preset: .aligned, values: .automatic(minimumStride: weekInSeconds)) { value in
+            if let date = value.as(Date.self) {
+                AxisValueLabel {
+                    Text(monthViewModel.formatWeekday(date))
+                        .font(.system(size: 9))
+                }
+                AxisTick()
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+            }
+        }
+    }
+    
+    // Month chart Y axis configuration
+    private var monthYAxis: some AxisContent {
+        AxisMarks(position: .trailing) { value in
+            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+            AxisTick()
+            AxisValueLabel()
+        }
+    }
+    
+    // MARK: - Month Chart View
     @ViewBuilder
-    private var totalChartPlaceholderView: some View {
-        placeholderView(for: .total)
+    private var monthChartView: some View {
+        GeometryReader { geometry in
+            // Month chart with components separated to help the compiler
+            Chart {
+                monthLineMarks
+                monthPointMarks
+                monthSelectionMark
+            }
+            .chartXAxis(content: { monthXAxis })
+            .chartYScale(domain: monthViewModel.weightRange.min...monthViewModel.weightRange.max)
+            .chartYAxis(content: { monthYAxis })
+            .chartScrollableAxes(.horizontal)
+            .chartXVisibleDomain(length: monthViewModel.visibleDomainLength)
+            // Using a binding wrapper to handle the Date? to Date conversion for chartScrollPosition
+            .chartScrollPosition(x: Binding(
+                get: { monthViewModel.scrollPosition ?? Date() },
+                set: { monthViewModel.scrollPosition = $0 }
+            ))
+            .chartXSelection(value: Binding(
+                get: { monthViewModel.selectedDate },
+                set: { monthViewModel.selectPointAtDate($0) }
+            ))
+            .chartLegend(.hidden)
+            .frame(width: geometry.size.width)
+        }
+    }
+    
+    // MARK: - Year Chart Components
+    
+    // Year chart line marks
+    private var yearLineMarks: some ChartContent {
+        ForEach(yearViewModel.chartPoints) { point in
+            LineMark(
+                x: .value("Month", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+            .foregroundStyle(.blue)
+        }
+    }
+    
+    // Year chart point marks - only show points that are visible
+    private var yearPointMarks: some ChartContent {
+        ForEach(yearViewModel.getVisiblePoints()) { point in
+            PointMark(
+                x: .value("Month", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .foregroundStyle(.blue)
+            .symbolSize(yearViewModel.selectedPoint?.id == point.id ? 80 : 40)
+        }
+    }
+    
+    // Year chart selection indicator
+    private var yearSelectionMark: some ChartContent {
+        let selectedDate = yearViewModel.selectedDate
+        
+        return RuleMark(x: .value("Selected Month", selectedDate ?? Date()))
+            .foregroundStyle(selectedDate != nil ? .gray.opacity(0.5) : .clear)
+            .opacity(selectedDate != nil ? 1.0 : 0.0)
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .zIndex(100)
+    }
+    
+    // Year chart X axis configuration with month abbreviations
+    private var yearXAxis: some AxisContent {
+        // Use explicit month values to ensure all months are shown
+        AxisMarks(values: .stride(by: .month)) { value in
+            if let date = value.as(Date.self) {
+                AxisValueLabel {
+                    // Use single letter abbreviation for more consistent display
+                    Text(yearViewModel.formatMonthSingleLetter(date))
+                        .font(.system(size: 9, weight: .medium))
+                }
+                AxisTick()
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+            }
+        }
+    }
+    
+    // Year chart Y axis configuration
+    private var yearYAxis: some AxisContent {
+        AxisMarks(position: .trailing) { value in
+            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+            AxisTick()
+            AxisValueLabel()
+        }
+    }
+    
+    // MARK: - Year Chart View
+    @ViewBuilder
+    private var yearChartView: some View {
+        GeometryReader { geometry in
+            // Year chart with components
+            Chart {
+                yearLineMarks
+                yearPointMarks
+                yearSelectionMark
+            }
+            .chartXAxis(content: { yearXAxis })
+            .chartYScale(domain: yearViewModel.weightRange.min...yearViewModel.weightRange.max)
+            .chartYAxis(content: { yearYAxis })
+            .chartScrollableAxes(.horizontal)
+            .chartXVisibleDomain(length: yearViewModel.visibleDomainLength)
+            .chartScrollPosition(x: Binding(
+                get: { yearViewModel.scrollPosition ?? Date() },
+                set: { yearViewModel.scrollPosition = $0 }
+            ))
+            .chartXSelection(value: Binding(
+                get: { yearViewModel.selectedDate },
+                set: { yearViewModel.selectPointAtDate($0) }
+            ))
+            .chartLegend(.hidden)
+            .frame(width: geometry.size.width)
+        }
+    }
+    
+    // MARK: - Total Chart Components
+    
+    // Total chart line marks
+    private var totalLineMarks: some ChartContent {
+        ForEach(yearViewModel.chartPoints) { point in
+            LineMark(
+                x: .value("Month", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+            .foregroundStyle(.blue)
+        }
+    }
+    
+    // Total chart point marks
+    private var totalPointMarks: some ChartContent {
+        ForEach(yearViewModel.chartPoints) { point in
+            PointMark(
+                x: .value("Month", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .foregroundStyle(.blue)
+            .symbolSize(yearViewModel.selectedPoint?.id == point.id ? 80 : 40)
+        }
+    }
+    
+    // Total chart selection indicator
+    private var totalSelectionMark: some ChartContent {
+        let selectedDate = yearViewModel.selectedDate
+        
+        return RuleMark(x: .value("Selected Month", selectedDate ?? Date()))
+            .foregroundStyle(selectedDate != nil ? .gray.opacity(0.5) : .clear)
+            .opacity(selectedDate != nil ? 1.0 : 0.0)
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .zIndex(100)
+    }
+    
+    // Total chart Y axis configuration - same as other charts
+    private var totalYAxis: some AxisContent {
+        AxisMarks(position: .trailing) { value in
+            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+            AxisTick()
+            AxisValueLabel()
+        }
+    }
+    
+    // MARK: - Total Chart View
+    @ViewBuilder
+    private var totalChartView: some View {
+        GeometryReader { geometry in
+            // Total chart - uses year data but without scrolling
+            Chart {
+                totalLineMarks
+                totalPointMarks
+                totalSelectionMark
+            }
+            // Hide X axis labels - only show grid lines
+            .chartXAxis {
+                AxisMarks { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                }
+            }
+            .chartYScale(domain: yearViewModel.weightRange.min...yearViewModel.weightRange.max)
+            .chartYAxis(content: { totalYAxis })
+            // No scroll - fit all points
+            .chartXScale(domain: [yearViewModel.chartPoints.first?.date ?? Date(), yearViewModel.chartPoints.last?.date ?? Date()])
+            .chartXSelection(value: Binding(
+                get: { yearViewModel.selectedDate },
+                set: { yearViewModel.selectPointAtDate($0) }
+            ))
+            .chartLegend(.hidden)
+            .frame(width: geometry.size.width)
+        }
     }
     
     // MARK: - Placeholder View

@@ -269,8 +269,9 @@ class WeekSectionViewModel: ObservableObject {
     func getVisiblePoints() -> [WeightChartPoint] {
         guard !chartPoints.isEmpty else { return [] }
         
-        // If we have very few points, just show all of them
-        if chartPoints.count < 20 {
+        // If we have fewer points, show all of them to ensure consistent display
+        // Increased threshold to 50 to better handle typical weekly data volumes
+        if chartPoints.count < 50 {
             return chartPoints
         }
         
@@ -289,9 +290,10 @@ class WeekSectionViewModel: ObservableObject {
         let startDate = scrollPosition.addingTimeInterval(-halfDomainLength)
         let endDate = scrollPosition.addingTimeInterval(halfDomainLength)
         
-        // Add less padding to improve performance - just enough to prevent edge popping
-        let paddedStartDate = startDate.addingTimeInterval(-24*60*60) // 1 day of padding
-        let paddedEndDate = endDate.addingTimeInterval(24*60*60)      // 1 day of padding
+        // Increase padding to ensure points appear before they enter the viewport
+        // This helps with the issue of points only appearing during scroll
+        let paddedStartDate = startDate.addingTimeInterval(-3*24*60*60) // 3 days of padding
+        let paddedEndDate = endDate.addingTimeInterval(3*24*60*60)      // 3 days of padding
         
         // Binary search to find start and end indices for better performance with large datasets
         let startIndex = binarySearchForDateIndex(date: paddedStartDate, isLowerBound: true)
@@ -301,24 +303,15 @@ class WeekSectionViewModel: ObservableObject {
         if startIndex <= endIndex && startIndex < chartPoints.count {
             let visibleRange = max(0, startIndex)..<min(endIndex + 1, chartPoints.count)
             
-            // If we have a lot of points in the visible range, sample them to improve performance
-            let points = Array(chartPoints[visibleRange])
-            if points.count > 30 {
-                // Sample every nth point to reduce rendering load
-                let samplingRate = points.count / 20
-                cachedVisiblePoints = stride(from: 0, to: points.count, by: max(1, samplingRate)).map { points[$0] }
-                
-                // Always include the selected point if there is one
-                if let selectedPoint = selectedPoint, points.contains(where: { $0.id == selectedPoint.id }) {
-                    if !cachedVisiblePoints.contains(where: { $0.id == selectedPoint.id }) {
-                        cachedVisiblePoints.append(selectedPoint)
-                    }
-                }
-                
-                return cachedVisiblePoints
+            // Use all points in the visible range instead of sampling
+            // This ensures all data points are displayed consistently
+            cachedVisiblePoints = Array(chartPoints[visibleRange])
+            
+            // Always include the selected point if there is one and it's not already included
+            if let selectedPoint = selectedPoint, !cachedVisiblePoints.contains(where: { $0.id == selectedPoint.id }) {
+                cachedVisiblePoints.append(selectedPoint)
             }
             
-            cachedVisiblePoints = points
             return cachedVisiblePoints
         }
         
