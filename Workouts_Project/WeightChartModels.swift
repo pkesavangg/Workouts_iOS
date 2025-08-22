@@ -46,13 +46,13 @@ struct WeightChartPoint: Identifiable, Equatable {
         self.date = WeightChartDataManager.parseEntryDate(entry.entryTimestamp) ?? Date()
         
         // Convert weight from Int (stored as grams * 100) to Double (kg or lbs)
-        self.weight = Double(entry.weight) / 100.0
+        self.weight = Double(entry.weight) / 10.0
     }
     
     init(from entry: WeightEntry, fallbackDate: Date) {
         self.originalEntry = entry
         self.date = fallbackDate
-        self.weight = Double(entry.weight) / 100.0
+        self.weight = Double(entry.weight) / 10.0
     }
     
     // Equatable conformance

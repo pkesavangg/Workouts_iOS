@@ -99,10 +99,11 @@ final class WeightEntriesViewModel: ObservableObject {
             self.entries = createEntries
             
             #if DEBUG
-            WeightChartDataManager.debugDateParsing(createEntries)
+            print("✅ Fetched \(createEntries.count) weight entries")
+            print("First entry: \(createEntries.first?.entryTimestamp ?? "none")")
             #endif
             
-            print("✅ Fetched \(createEntries.count) weight entries", createEntries.first)
+            print("Fetched \(self.entries.count) valid entries")
         } catch {
             self.errorMessage = "Failed to fetch entries: \(error.localizedDescription)"
             print("❌ Fetch entries error: \(error)")

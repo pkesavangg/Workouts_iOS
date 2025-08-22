@@ -10,59 +10,15 @@ import Charts
 
 struct WeightChartView: View {
     let entries: [WeightEntry]
-    @State private var selectedPeriod: TimePeriod = .week
-    @State private var selectedDate: Date?
-    @State private var chartFrame: CGRect = .zero
-    @State private var scrollPosition: Date = Date()
-    
-    // Cached data to prevent continuous recalculation
-    @State private var cachedChartPoints: [WeightChartPoint] = []
-    @State private var cachedPeriod: TimePeriod = .week
-    @State private var cachedEntriesCount: Int = 0
-    
-    // Computed properties for chart data with caching
-    private var filteredEntries: [WeightEntry] {
-        WeightChartDataManager.filteredEntries(entries, for: selectedPeriod)
-    }
-    
-    private var chartPoints: [WeightChartPoint] {
-        // Use cache if data hasn't changed
-        if cachedPeriod == selectedPeriod && cachedEntriesCount == entries.count && !cachedChartPoints.isEmpty {
-            return cachedChartPoints
-        }
-        
-        // Recalculate and cache with period-specific aggregation
-        let newPoints = WeightChartDataManager.convertToChartPoints(filteredEntries, for: selectedPeriod)
-        
-        // Update cache on next frame to avoid view update during body computation
-        DispatchQueue.main.async {
-            cachedChartPoints = newPoints
-            cachedPeriod = selectedPeriod
-            cachedEntriesCount = entries.count
-        }
-        
-        return newPoints
-    }
-    
-    private var weightRange: (min: Double, max: Double) {
-        WeightChartDataManager.getWeightRange(from: chartPoints)
-    }
+    @StateObject private var viewModel = WeekSectionViewModel()
     
     private var hasData: Bool {
-        !chartPoints.isEmpty
+        !viewModel.chartPoints.isEmpty
     }
     
     // Debug computed property to check data flow
     private var debugInfo: String {
-        return "Total entries: \(entries.count), Filtered: \(filteredEntries.count), Chart points: \(chartPoints.count)"
-    }
-    
-    // Selected point information
-    private var selectedPoint: WeightChartPoint? {
-        guard let selectedDate = selectedDate else { return nil }
-        return chartPoints.min(by: { 
-            abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate))
-        })
+        return "Total entries: \(entries.count), Chart points: \(viewModel.chartPoints.count)"
     }
     
     var body: some View {
@@ -73,10 +29,6 @@ struct WeightChartView: View {
             if hasData {
                 // Chart
                 chartSection
-                
-                // Time period selector
-                TimePeriodSelector(selectedPeriod: $selectedPeriod)
-                    .padding(.horizontal)
             } else {
                 // Debug info and empty state
                 VStack {
@@ -90,16 +42,10 @@ struct WeightChartView: View {
             }
         }
         .onAppear {
-            scrollToLatestData()
+            viewModel.processEntries(entries)
         }
-        .onChange(of: selectedPeriod) { _, _ in
-            selectedDate = nil // Clear selection when period changes
-            scrollToLatestData()
-        }
-        .onChange(of: chartPoints) { _, _ in
-            // Reset chart position when data changes
-            selectedDate = nil
-            scrollToLatestData()
+        .onChange(of: entries) { _, newEntries in
+            viewModel.processEntries(newEntries)
         }
     }
     
@@ -107,22 +53,22 @@ struct WeightChartView: View {
     @ViewBuilder
     private var weightInfoSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(weightDisplayLabel)
+            Text(viewModel.weightDisplayLabel())
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
             
             HStack {
-                Text(weightDisplayValue)
+                Text(viewModel.weightDisplayValue())
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
                 
                 Spacer()
                 
-                if let selectedPoint = selectedPoint {
+                if let selectedPoint = viewModel.selectedPoint {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(formatDate(selectedPoint.date))
+                        Text(viewModel.formatDate(selectedPoint.date))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
@@ -143,7 +89,7 @@ struct WeightChartView: View {
     private var chartSection: some View {
         Chart {
             // Main weight line
-            ForEach(chartPoints) { point in
+            ForEach(viewModel.chartPoints) { point in
                 LineMark(
                     x: .value("Date", point.date),
                     y: .value("Weight", point.weight)
@@ -158,33 +104,25 @@ struct WeightChartView: View {
                     y: .value("Weight", point.weight)
                 )
                 .foregroundStyle(.blue)
-                .symbolSize(selectedPoint?.id == point.id ? 100 : 50)
+                .symbolSize(viewModel.selectedPoint?.id == point.id ? 100 : 50)
             }
             
             // Selection indicator
-            if let selectedDate = selectedDate {
+            if let selectedDate = viewModel.selectedDate {
                 RuleMark(x: .value("Selected Date", selectedDate))
                     .foregroundStyle(.gray)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
             }
         }
-        .chartYScale(domain: weightRange.min...weightRange.max)
-        .chartScrollableAxes(getScrollableAxes())
-        .chartXVisibleDomain(length: getVisibleDomainLength())
-        .chartScrollPosition(x: $scrollPosition) // Instance method 'chartScrollPosition(x:)' requires that 'Date?' conform to 'Plottable'
-        .chartXSelection(value: $selectedDate)
+        .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
+        .chartScrollableAxes(.horizontal)
+        .chartXVisibleDomain(length: viewModel.visibleDomainLength) // Dynamic visible domain based on data
+        .chartScrollPosition(x: $viewModel.scrollPosition)
+        .chartXSelection(value: Binding(
+            get: { viewModel.selectedDate },
+            set: { viewModel.selectPointAtDate($0) }
+        ))
         .frame(height: 200)
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear {
-                        chartFrame = geo.frame(in: .local)
-                    }
-                    .onChange(of: geo.frame(in: .local)) { _, newFrame in
-                        chartFrame = newFrame
-                    }
-            }
-        )
         .padding(.horizontal)
     }
     
@@ -210,95 +148,7 @@ struct WeightChartView: View {
         .padding()
     }
     
-    // MARK: - Computed Properties
-    
-    private var weightDisplayLabel: String {
-        if selectedPoint != nil {
-            return "Selected Weight"
-        } else {
-            switch selectedPeriod {
-            case .week:
-                return "Average This Week"
-            case .month:
-                return "Average This Month"
-            case .year:
-                return "Average This Year"
-            case .total:
-                return "Overall Average"
-            }
-        }
-    }
-    
-    private var weightDisplayValue: String {
-        let weight: Double
-        let unit = chartPoints.first?.originalEntry.unit ?? "kg"
-        
-        if let selectedPoint = selectedPoint {
-            weight = selectedPoint.weight
-        } else {
-            // Calculate average
-            let weights = chartPoints.map { $0.weight }
-            weight = weights.isEmpty ? 0 : weights.reduce(0, +) / Double(weights.count)
-        }
-        
-        return String(format: "%.1f %@", weight, unit)
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func scrollToLatestData() {
-        guard !chartPoints.isEmpty else { return }
-        
-        // Get the most recent date from chart points
-        let latestDate = chartPoints.map({ $0.date }).max() ?? Date()
-        DispatchQueue.main.async {
-            scrollPosition = latestDate
-        }
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        switch selectedPeriod {
-        case .week, .month:
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .none
-        case .year, .total:
-            formatter.dateStyle = .long
-            formatter.timeStyle = .none
-        }
-        return formatter.string(from: date)
-    }
-    
-    private func getScrollableAxes() -> Axis.Set {
-        switch selectedPeriod {
-        case .week, .month, .year:
-            return .horizontal
-        case .total:
-            return []
-        }
-    }
-    
 
-    private func getVisibleDomainLength() -> TimeInterval {
-        switch selectedPeriod {
-        case .week:
-            return 7 * 24 * 60 * 60 // 7 days
-        case .month:
-            return 30 * 24 * 60 * 60 // 30 days
-        case .year:
-            return 90 * 24 * 60 * 60 // Show ~3 months at a time for year view
-        case .total:
-            // For total view, calculate the actual data range
-            if !chartPoints.isEmpty {
-                let dates = chartPoints.map { $0.date }
-                if let minDate = dates.min(), let maxDate = dates.max() {
-                    let range = maxDate.timeIntervalSince(minDate)
-                    return range > 0 ? range : 365 * 24 * 60 * 60 // Default to 1 year if no range
-                }
-            }
-            return 365 * 24 * 60 * 60 // Default to 1 year
-        }
-    }
 }
 
 #Preview {

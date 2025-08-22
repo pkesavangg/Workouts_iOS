@@ -164,14 +164,15 @@ struct WeightEntryRow: View {
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
-                    
-                    Text(entry.source.capitalized)
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(sourceBackgroundColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(4)
+                    if let source = entry.source {
+                        Text(source.capitalized)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(sourceBackgroundColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(4)
+                    }
                 }
                 
                 Spacer()
@@ -228,7 +229,10 @@ struct WeightEntryRow: View {
     }
     
     private var sourceBackgroundColor: Color {
-        switch entry.source.lowercased() {
+        guard let source = entry.source else {
+            return .gray
+        }
+        switch source.lowercased() {
         case "manual":
             return .blue
         case "btwifir4":
