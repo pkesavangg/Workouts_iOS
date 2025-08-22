@@ -9,9 +9,9 @@ import Foundation
 
 // MARK: - Time Period Selection
 enum TimePeriod: String, CaseIterable {
-    case week = "1W"
-    case month = "1M"
-    case year = "1Y"
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
     case total = "All"
     
     var displayName: String {

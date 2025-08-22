@@ -11,6 +11,7 @@ import Charts
 struct WeightChartView: View {
     let entries: [WeightEntry]
     @StateObject private var viewModel = WeekSectionViewModel()
+    @State private var selectedTimePeriod: TimePeriod = .week
     
     private var hasData: Bool {
         !viewModel.chartPoints.isEmpty
@@ -52,6 +53,22 @@ struct WeightChartView: View {
             DispatchQueue.main.async {
                 viewModel.processEntries(newEntries)
             }
+        }
+        .onChange(of: selectedTimePeriod) { _, newPeriod in
+            #if DEBUG
+            print("Changed time period to: \(newPeriod.displayName)")
+            #endif
+            
+            // We only need to process entries for the week view for now
+            // In the future, you'll use different viewModels for each time period
+            if newPeriod == .week {
+                viewModel.processEntries(entries)
+            }
+            // When you implement other views, you'll add more cases here
+            // Example:
+            // case .month: monthViewModel.processEntries(entries)
+            // case .year: yearViewModel.processEntries(entries)
+            // case .total: totalViewModel.processEntries(entries)
         }
     }
     
@@ -169,73 +186,146 @@ struct WeightChartView: View {
     // Main chart section - simplified version
     @ViewBuilder
     private var chartSection: some View {
-        VStack {
-            GeometryReader { geometry in
-                // Simplified chart with fewer modifiers
-                Chart {
-                    // Line for all points
-                    ForEach(viewModel.chartPoints) { point in
-                        LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("Weight", point.weight)
-                        )
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
-                        .foregroundStyle(.blue)
-                    }
-                    
-                    // Only visible points
-                    ForEach(viewModel.getVisiblePoints()) { point in
-                        PointMark(
-                            x: .value("Date", point.date),
-                            y: .value("Weight", point.weight)
-                        )
-                        .foregroundStyle(.blue)
-                        .symbolSize(viewModel.selectedPoint?.id == point.id ? 80 : 40)
-                    }
-                    
-                    // Selection indicator - directly included for simplicity
-                    if let selectedDate = viewModel.selectedDate {
-                        RuleMark(x: .value("Selected Date", selectedDate))
-                            .foregroundStyle(.gray.opacity(0.5))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    }
+        VStack(spacing: 16) {
+            // Display the appropriate chart view based on selected time period
+            Group {
+                switch selectedTimePeriod {
+                case .week:
+                    weekChartView
+                case .month:
+                    monthChartPlaceholderView
+                case .year:
+                    yearChartPlaceholderView
+                case .total:
+                    totalChartPlaceholderView
                 }
-                .chartXAxis {
-                    // Show axis marks for each day
-                    AxisMarks(values: .stride(by: .day)) { value in
-                        if let date = value.as(Date.self) {
-                            AxisValueLabel {
-                                Text(viewModel.formatWeekday(date))
-                                    .font(.system(size: 9))
-                            }
-                            AxisTick()
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                        }
-                    }
-                }
-                .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
-                .chartYAxis {
-                    AxisMarks(position: .trailing) { value in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                        AxisTick()
-                        AxisValueLabel()
-                    }
-                }
-                .chartScrollableAxes(.horizontal)
-                .chartXVisibleDomain(length: viewModel.visibleDomainLength)
-                .chartScrollPosition(x: $viewModel.scrollPosition)
-                .chartXSelection(value: Binding(
-                    get: { viewModel.selectedDate },
-                    set: { viewModel.selectPointAtDate($0) }
-                ))
-                .chartLegend(.hidden)
-                .frame(width: geometry.size.width)
             }
+            .frame(height: 200)
+            
+            // Time period segment control
+            timePeriodSelector
         }
-        .frame(height: 200)
         .padding(.horizontal)
     }
     
+    // MARK: - Week Chart View
+    @ViewBuilder
+    private var weekChartView: some View {
+        GeometryReader { geometry in
+            // Week chart
+            Chart {
+                // Line for all points
+                ForEach(viewModel.chartPoints) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("Weight", point.weight)
+                    )
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .foregroundStyle(.blue)
+                }
+                
+                // Only visible points
+                ForEach(viewModel.getVisiblePoints()) { point in
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value("Weight", point.weight)
+                    )
+                    .foregroundStyle(.blue)
+                    .symbolSize(viewModel.selectedPoint?.id == point.id ? 80 : 40)
+                }
+                
+                // Selection indicator - directly included for simplicity
+                if let selectedDate = viewModel.selectedDate {
+                    RuleMark(x: .value("Selected Date", selectedDate))
+                        .foregroundStyle(.gray.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                }
+            }
+            .chartXAxis {
+                // Show axis marks for each day
+                AxisMarks(values: .stride(by: .day)) { value in
+                    if let date = value.as(Date.self) {
+                        AxisValueLabel {
+                            Text(viewModel.formatWeekday(date))
+                                .font(.system(size: 9))
+                        }
+                        AxisTick()
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    }
+                }
+            }
+            .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
+            .chartYAxis {
+                AxisMarks(position: .trailing) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    AxisTick()
+                    AxisValueLabel()
+                }
+            }
+            .chartScrollableAxes(.horizontal)
+            .chartXVisibleDomain(length: viewModel.visibleDomainLength)
+            .chartScrollPosition(x: $viewModel.scrollPosition)
+            .chartXSelection(value: Binding(
+                get: { viewModel.selectedDate },
+                set: { viewModel.selectPointAtDate($0) }
+            ))
+            .chartLegend(.hidden)
+            .frame(width: geometry.size.width)
+        }
+    }
+    
+    // MARK: - Month Chart Placeholder
+    @ViewBuilder
+    private var monthChartPlaceholderView: some View {
+        placeholderView(for: .month)
+    }
+    
+    // MARK: - Year Chart Placeholder
+    @ViewBuilder
+    private var yearChartPlaceholderView: some View {
+        placeholderView(for: .year)
+    }
+    
+    // MARK: - Total Chart Placeholder
+    @ViewBuilder
+    private var totalChartPlaceholderView: some View {
+        placeholderView(for: .total)
+    }
+    
+    // MARK: - Placeholder View
+    @ViewBuilder
+    private func placeholderView(for period: TimePeriod) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            
+            Text("\(period.displayName) View")
+                .font(.title2)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+            
+            Text("This chart type will be implemented soon")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+    
+    // MARK: - Time Period Selector
+    @ViewBuilder
+    private var timePeriodSelector: some View {
+        // Segment control
+        Picker("Time Period", selection: $selectedTimePeriod) {
+            ForEach(TimePeriod.allCases, id: \.self) { period in
+                Text(period.displayName).tag(period)
+            }
+        }
+        .pickerStyle(SegmentedPickerStyle())
+    }
     // MARK: - Empty State
     @ViewBuilder
     private var emptyStateView: some View {
