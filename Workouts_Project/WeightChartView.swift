@@ -42,10 +42,16 @@ struct WeightChartView: View {
             }
         }
         .onAppear {
-            viewModel.processEntries(entries)
+            // Process entries once on appear
+            DispatchQueue.main.async {
+                viewModel.processEntries(entries)
+            }
         }
         .onChange(of: entries) { _, newEntries in
-            viewModel.processEntries(newEntries)
+            // Process entries asynchronously to avoid UI blocking
+            DispatchQueue.main.async {
+                viewModel.processEntries(newEntries)
+            }
         }
     }
     
@@ -85,43 +91,139 @@ struct WeightChartView: View {
     }
     
     // MARK: - Chart Section
-    @ViewBuilder
-    private var chartSection: some View {
-        Chart {
-            // Main weight line
-            ForEach(viewModel.chartPoints) { point in
-                LineMark(
-                    x: .value("Date", point.date),
-                    y: .value("Weight", point.weight)
-                )
-                .foregroundStyle(.blue)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                .interpolationMethod(.linear)
+    
+    // MARK: - Chart Helper Methods
+    
+    /// Returns whether a point is the currently selected point
+    private func isPointSelected(_ point: WeightChartPoint) -> Bool {
+        return viewModel.selectedPoint?.id == point.id
+    }
+    
+    /// Returns the symbol size for a point based on selection state
+    private func symbolSizeForPoint(_ point: WeightChartPoint) -> CGFloat {
+        return isPointSelected(point) ? 100 : 50
+    }
+    
+    // Custom axis value label view - kept for reference but no longer used directly
+    private func createAxisLabel(for date: Date) -> some View {
+        Text(viewModel.formatWeekday(date))
+            .font(.system(size: 9, weight: .medium))
+            .fixedSize()
+            .allowsHitTesting(false)
+    }
+    
+    // MARK: - Chart Components
+    
+    // Line marks component
+    private var lineMarks: some ChartContent {
+        ForEach(viewModel.chartPoints) { point in
+            LineMark(
+                x: .value("Date", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+            .foregroundStyle(.blue)
+            .interpolationMethod(.linear) // Changed to linear for better performance
+        }
+    }
+    
+    // Point marks component
+    private var pointMarks: some ChartContent {
+        ForEach(viewModel.getVisiblePoints()) { point in
+            PointMark(
+                x: .value("Date", point.date),
+                y: .value("Weight", point.weight)
+            )
+            .foregroundStyle(.blue)
+            .symbolSize(viewModel.selectedPoint?.id == point.id ? 80 : 40)
+        }
+    }
+    
+    // Selection indicator component - simplified without using Group
+    private var selectionMark: some ChartContent {
+        let selectedDate = viewModel.selectedDate
+        // Return the mark directly, it will only be visible if there's a selection
+        return RuleMark(x: .value("Selected Date", selectedDate ?? Date()))
+            .foregroundStyle(selectedDate != nil ? .gray.opacity(0.5) : .clear)
+            .opacity(selectedDate != nil ? 1.0 : 0.0)
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .zIndex(100)
+    }
+    
+    // Custom X axis component
+    private var customXAxis: some AxisContent {
+        AxisMarks(position: .bottom, values: .stride(by: .day)) { value in
+            if let date = value.as(Date.self) {
+                AxisValueLabel {
+                    Text(viewModel.formatWeekday(date))
+                        .font(.system(size: 9, weight: .medium))
+                        .fixedSize()
+                }
                 
-                // Data points
-                PointMark(
-                    x: .value("Date", point.date),
-                    y: .value("Weight", point.weight)
-                )
-                .foregroundStyle(.blue)
-                .symbolSize(viewModel.selectedPoint?.id == point.id ? 100 : 50)
-            }
-            
-            // Selection indicator
-            if let selectedDate = viewModel.selectedDate {
-                RuleMark(x: .value("Selected Date", selectedDate))
-                    .foregroundStyle(.gray)
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                AxisTick(stroke: StrokeStyle(lineWidth: 0.5))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
             }
         }
-        .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
-        .chartScrollableAxes(.horizontal)
-        .chartXVisibleDomain(length: viewModel.visibleDomainLength) // Dynamic visible domain based on data
-        .chartScrollPosition(x: $viewModel.scrollPosition)
-        .chartXSelection(value: Binding(
-            get: { viewModel.selectedDate },
-            set: { viewModel.selectPointAtDate($0) }
-        ))
+    }
+    
+    // Main chart section - simplified version
+    @ViewBuilder
+    private var chartSection: some View {
+        VStack {
+            GeometryReader { geometry in
+                // Simplified chart with fewer modifiers
+                Chart {
+                    // Line for all points
+                    ForEach(viewModel.chartPoints) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("Weight", point.weight)
+                        )
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        .foregroundStyle(.blue)
+                    }
+                    
+                    // Only visible points
+                    ForEach(viewModel.getVisiblePoints()) { point in
+                        PointMark(
+                            x: .value("Date", point.date),
+                            y: .value("Weight", point.weight)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(viewModel.selectedPoint?.id == point.id ? 80 : 40)
+                    }
+                    
+                    // Selection indicator - directly included for simplicity
+                    if let selectedDate = viewModel.selectedDate {
+                        RuleMark(x: .value("Selected Date", selectedDate))
+                            .foregroundStyle(.gray.opacity(0.5))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    }
+                }
+                .chartXAxis {
+                    // Show axis marks for each day
+                    AxisMarks(values: .stride(by: .day)) { value in
+                        if let date = value.as(Date.self) {
+                            AxisValueLabel {
+                                Text(viewModel.formatWeekday(date))
+                                    .font(.system(size: 9))
+                            }
+                            AxisTick()
+                        }
+                    }
+                }
+                .chartYScale(domain: viewModel.weightRange.min...viewModel.weightRange.max)
+                .chartScrollableAxes(.horizontal)
+                .chartXVisibleDomain(length: viewModel.visibleDomainLength)
+                .chartScrollPosition(x: $viewModel.scrollPosition)
+                .chartXSelection(value: Binding(
+                    get: { viewModel.selectedDate },
+                    set: { viewModel.selectPointAtDate($0) }
+                ))
+                .chartLegend(.hidden)
+                .frame(width: geometry.size.width)
+            }
+        }
         .frame(height: 200)
         .padding(.horizontal)
     }

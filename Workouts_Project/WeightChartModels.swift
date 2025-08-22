@@ -66,19 +66,37 @@ struct WeightChartPoint: Identifiable, Equatable {
 
 // MARK: - Chart Data Manager
 class WeightChartDataManager {
+    // Cached formatters for better performance
+    private static let iso8601FormatterWithFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    
+    private static let iso8601FormatterStandard: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+    
+    private static let calendar = Calendar.current
+    
+    private static let monthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        formatter.timeZone = TimeZone(abbreviation: "UTC")
+        return formatter
+    }()
     
     /// Robust date parsing that handles multiple ISO 8601 variations
     static func parseEntryDate(_ timestamp: String) -> Date? {
-        // Strategy 1: Try simple ISO8601DateFormatter first
-        let iso8601Formatter = ISO8601DateFormatter()
-        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso8601Formatter.date(from: timestamp) {
+        // Strategy 1: Try simple ISO8601DateFormatter first - use cached instance
+        if let date = iso8601FormatterWithFractional.date(from: timestamp) {
             return date
         }
         
-        // Try without fractional seconds
-        iso8601Formatter.formatOptions = [.withInternetDateTime]
-        if let date = iso8601Formatter.date(from: timestamp) {
+        // Try without fractional seconds - use cached instance
+        if let date = iso8601FormatterStandard.date(from: timestamp) {
             return date
         }
         
@@ -259,9 +277,7 @@ class WeightChartDataManager {
         
         // Group entries by month-year
         var monthlyGroups: [String: [WeightEntry]] = [:]
-        let monthFormatter = DateFormatter()
-        monthFormatter.dateFormat = "yyyy-MM"
-        monthFormatter.timeZone = TimeZone(abbreviation: "UTC")
+        // Use cached month formatter
         
         for entry in validEntries {
             if let date = parseEntryDate(entry.entryTimestamp) {
@@ -282,7 +298,6 @@ class WeightChartDataManager {
             
             // Use the start date of the month for proper x-axis alignment
             if let monthDate = monthFormatter.date(from: monthKey) {
-                let calendar = Calendar.current
                 let startOfMonth = calendar.dateInterval(of: .month, for: monthDate)?.start ?? monthDate
                 
                 // Create a representative entry for the month

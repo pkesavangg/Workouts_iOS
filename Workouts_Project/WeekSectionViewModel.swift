@@ -49,10 +49,26 @@ class WeekSectionViewModel: ObservableObject {
             return
         }
         
-        self.selectedDate = date
-        self.selectedPoint = chartPoints.min(by: { 
-            abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
+        // Normalize the selection date to the day component only for better matching
+        let normalizedSelectionDate = normalizeToDay(date)
+        
+        // Set the selected date - this will be used for the rule mark
+        self.selectedDate = normalizedSelectionDate
+        
+        // Find the closest chart point by day
+        self.selectedPoint = chartPoints.min(by: { point1, point2 in
+            let diff1 = abs(normalizeToDay(point1.date).timeIntervalSince(normalizedSelectionDate))
+            let diff2 = abs(normalizeToDay(point2.date).timeIntervalSince(normalizedSelectionDate))
+            return diff1 < diff2
         })
+        
+        #if DEBUG
+        if let point = selectedPoint {
+            print("📅 Selected point: \(formatDate(point.date)) with weight: \(point.weight)")
+        } else {
+            print("⚠️ No point found close to selected date: \(formatDate(normalizedSelectionDate))")
+        }
+        #endif
     }
     
     // Clear selection
@@ -67,49 +83,73 @@ class WeekSectionViewModel: ObservableObject {
         
         // Get the most recent date from chart points
         let latestDate = chartPoints.map({ $0.date }).max() ?? Date()
+        
+        // Set scroll position to latest date
         scrollPosition = latestDate
+        
+        // Also select the latest point by default
+        selectPointAtDate(latestDate)
+        
+        #if DEBUG
+        print("📊 Scrolling to latest data: \(formatDate(latestDate))")
+        print("📊 Total data points: \(chartPoints.count)")
+        print("📊 Date range: \(formatDate(chartPoints.first?.date ?? Date())) - \(formatDate(latestDate))")
+        #endif
     }
     
     // MARK: - Data Processing Methods
     
     /// Get the latest entry for each day across all available data
     private func getLatestEntryPerDay(_ entries: [WeightEntry]) -> [WeightChartPoint] {
-        // Parse dates from all entries without filtering for specific time period
-        let validEntries = entries.compactMap { entry -> (WeightEntry, Date)? in
-            // Parse date using the robust parser
-            guard let date = WeightChartDataManager.parseEntryDate(entry.entryTimestamp) else {
-                return nil
-            }
-            
-            // Include all entries with valid dates
-            return (entry, date)
-        }
-        
-        // Group entries by day (ignoring time component)
-        var entriesByDay: [String: [(entry: WeightEntry, date: Date)]] = [:]
+        // Create a shared date formatter - reusing instead of creating multiple instances
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         
-        for (entry, date) in validEntries {
+        // Group entries by day (ignoring time component) in a single pass
+        var latestEntryByDay: [String: (entry: WeightEntry, date: Date)] = [:]
+        
+        for entry in entries {
+            // Only process create operations to save memory
+            guard entry.isCreateOperation else { continue }
+            
+            // Parse date using the robust parser
+            guard let date = WeightChartDataManager.parseEntryDate(entry.entryTimestamp) else {
+                continue
+            }
+            
+            // Process all dates - removed cutoff filter to show all historical data
+            
+            // Get day key
             let dayKey = dateFormatter.string(from: date)
-            if entriesByDay[dayKey] == nil {
-                entriesByDay[dayKey] = []
-            }
-            entriesByDay[dayKey]?.append((entry, date))
-        }
-        
-        // Get the latest entry for each day
-        var latestEntriesPerDay: [WeightChartPoint] = []
-        for (_, dayEntries) in entriesByDay {
-            if let latestEntry = dayEntries.max(by: { $0.date < $1.date }) {
-                // Create chart point from the latest entry of the day
-                let point = WeightChartPoint(from: latestEntry.entry)
-                latestEntriesPerDay.append(point)
+            
+            // Update latest entry for this day if needed
+            if let existingEntry = latestEntryByDay[dayKey] {
+                if date > existingEntry.date {
+                    latestEntryByDay[dayKey] = (entry, date)
+                }
+            } else {
+                latestEntryByDay[dayKey] = (entry, date)
             }
         }
         
-        // Sort by date
-        return latestEntriesPerDay.sorted { $0.date < $1.date }
+        // Convert to chart points
+        var chartPoints: [WeightChartPoint] = []
+        chartPoints.reserveCapacity(latestEntryByDay.count) // Pre-allocate capacity to avoid resizing
+        
+        // Process all entries regardless of count - no limit
+        for (_, entryData) in latestEntryByDay {
+            // Normalize the date to midnight for proper day alignment
+            let normalizedDate = normalizeToDay(entryData.date)
+            
+            // Create chart point with normalized date
+            let point = WeightChartPoint(from: entryData.entry, fallbackDate: normalizedDate)
+            chartPoints.append(point)
+        }
+        
+        // Sort by date (limiting heap allocations by using in-place sort)
+        chartPoints.sort { $0.date < $1.date }
+        
+        return chartPoints
     }
     
     /// Calculate weight range for Y-axis scaling
@@ -169,12 +209,150 @@ class WeekSectionViewModel: ObservableObject {
         return String(format: "%.1f %@", weight, unit)
     }
     
-    /// Format a date appropriately for display
-    func formatDate(_ date: Date) -> String {
+    // Shared date formatter for better performance
+    private lazy var mediumDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        return formatter.string(from: date)
+        return formatter
+    }()
+    
+    /// Format a date appropriately for display
+    func formatDate(_ date: Date) -> String {
+        return mediumDateFormatter.string(from: date)
+    }
+    
+    // Shared calendar instance to avoid repeated calendar creations
+    private let calendar: Calendar = Calendar.current
+    
+    // Cache for weekday letters
+    private var weekdayLetters: [String] = ["", "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+    
+    /// Format a date to show just the weekday as a two-letter abbreviation (Su, Mo, Tu, We, Th, Fr, Sa)
+    func formatWeekday(_ date: Date) -> String {
+        // Get the weekday (1=Sunday, 2=Monday, ..., 7=Saturday)
+        let weekday = calendar.component(.weekday, from: date)
+        
+        // Return from cached array for better performance
+        return weekday >= 1 && weekday <= 7 ? weekdayLetters[weekday] : ""
+    }
+    
+    /// Normalize a date to midnight (00:00:00) of that day
+    func normalizeToDay(_ date: Date) -> Date {
+        // Use shared calendar instance
+        return calendar.startOfDay(for: date)
+    }
+    
+    // Cached visible points to improve scroll performance
+    private var cachedVisiblePoints: [WeightChartPoint] = []
+    private var lastScrollPosition: Date = Date()
+    
+    /// Get only the points visible in the current chart view
+    /// This optimizes rendering by only drawing points that are actually visible
+    func getVisiblePoints() -> [WeightChartPoint] {
+        guard !chartPoints.isEmpty else { return [] }
+        
+        // If we have very few points, just show all of them
+        if chartPoints.count < 20 {
+            return chartPoints
+        }
+        
+        // Only recalculate visible points if scroll position has changed significantly
+        // This improves scroll performance by reducing calculations during rapid scrolling
+        let scrollDifference = abs(scrollPosition.timeIntervalSince(lastScrollPosition))
+        if !cachedVisiblePoints.isEmpty && scrollDifference < 24*60*60 { // Full day difference threshold
+            return cachedVisiblePoints
+        }
+        
+        // Update last scroll position
+        lastScrollPosition = scrollPosition
+        
+        // Calculate the visible date range based on scroll position
+        let halfDomainLength = visibleDomainLength / 2.0
+        let startDate = scrollPosition.addingTimeInterval(-halfDomainLength)
+        let endDate = scrollPosition.addingTimeInterval(halfDomainLength)
+        
+        // Add less padding to improve performance - just enough to prevent edge popping
+        let paddedStartDate = startDate.addingTimeInterval(-24*60*60) // 1 day of padding
+        let paddedEndDate = endDate.addingTimeInterval(24*60*60)      // 1 day of padding
+        
+        // Binary search to find start and end indices for better performance with large datasets
+        let startIndex = binarySearchForDateIndex(date: paddedStartDate, isLowerBound: true)
+        let endIndex = binarySearchForDateIndex(date: paddedEndDate, isLowerBound: false)
+        
+        // Use slice to avoid copying the entire array
+        if startIndex <= endIndex && startIndex < chartPoints.count {
+            let visibleRange = max(0, startIndex)..<min(endIndex + 1, chartPoints.count)
+            
+            // If we have a lot of points in the visible range, sample them to improve performance
+            let points = Array(chartPoints[visibleRange])
+            if points.count > 30 {
+                // Sample every nth point to reduce rendering load
+                let samplingRate = points.count / 20
+                cachedVisiblePoints = stride(from: 0, to: points.count, by: max(1, samplingRate)).map { points[$0] }
+                
+                // Always include the selected point if there is one
+                if let selectedPoint = selectedPoint, points.contains(where: { $0.id == selectedPoint.id }) {
+                    if !cachedVisiblePoints.contains(where: { $0.id == selectedPoint.id }) {
+                        cachedVisiblePoints.append(selectedPoint)
+                    }
+                }
+                
+                return cachedVisiblePoints
+            }
+            
+            cachedVisiblePoints = points
+            return cachedVisiblePoints
+        }
+        
+        return []
+    }
+    
+    /// Check if a specific point is visible in the current view
+    /// This helps optimize rendering by only drawing point marks for visible points
+    func isPointVisible(_ point: WeightChartPoint) -> Bool {
+        // If we have very few points, all are visible
+        if chartPoints.count < 20 {
+            return true
+        }
+        
+        // Calculate the visible date range based on scroll position
+        let halfDomainLength = visibleDomainLength / 2.0
+        let startDate = scrollPosition.addingTimeInterval(-halfDomainLength)
+        let endDate = scrollPosition.addingTimeInterval(halfDomainLength)
+        
+        // Add padding for better visual experience
+        let paddedStartDate = startDate.addingTimeInterval(-24*60*60 * 2)
+        let paddedEndDate = endDate.addingTimeInterval(24*60*60 * 2)
+        
+        return point.date >= paddedStartDate && point.date <= paddedEndDate
+    }
+    
+    /// Binary search to find the closest index for a date
+    /// This is much faster than filtering the entire array
+    private func binarySearchForDateIndex(date: Date, isLowerBound: Bool) -> Int {
+        guard !chartPoints.isEmpty else { return 0 }
+        
+        var low = 0
+        var high = chartPoints.count - 1
+        
+        while low <= high {
+            let mid = (low + high) / 2
+            let midDate = chartPoints[mid].date
+            
+            if midDate < date {
+                low = mid + 1
+            } else if midDate > date {
+                high = mid - 1
+            } else {
+                return mid
+            }
+        }
+        
+        // When we exit the loop, low > high
+        // For lower bound, return high (largest date <= target)
+        // For upper bound, return low (smallest date >= target)
+        return isLowerBound ? high : low
     }
 }
 

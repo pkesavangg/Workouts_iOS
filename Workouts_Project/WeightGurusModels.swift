@@ -105,6 +105,18 @@ struct WeightEntry: Codable, Identifiable, Equatable {
 
 // MARK: - Helper Extensions
 extension WeightEntry {
+    // Static formatters to improve performance
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        return ISO8601DateFormatter()
+    }()
+    
+    private static let displayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+    
     var formattedWeight: String {
         let weightValue = Double(weight) / 10.0
         let unitString = unit ?? "kg"
@@ -112,13 +124,8 @@ extension WeightEntry {
     }
     
     var formattedDate: String {
-        let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: entryTimestamp) else { return entryTimestamp }
-        
-        let displayFormatter = DateFormatter()
-        displayFormatter.dateStyle = .medium
-        displayFormatter.timeStyle = .short
-        return displayFormatter.string(from: date)
+        guard let date = WeightEntry.iso8601Formatter.date(from: entryTimestamp) else { return entryTimestamp }
+        return WeightEntry.displayFormatter.string(from: date)
     }
     
     var isCreateOperation: Bool {
