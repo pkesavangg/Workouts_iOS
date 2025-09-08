@@ -413,6 +413,7 @@
 				DEVELOPMENT_TEAM = FK46LLGFK4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Workouts-Project-Info.plist";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "workout uses to enter the data in apple health";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "For testing purpose";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs location access to get Wi-Fi SSID";
@@ -445,6 +446,7 @@
 				DEVELOPMENT_TEAM = FK46LLGFK4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Workouts-Project-Info.plist";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "workout uses to enter the data in apple health";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "For testing purpose";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app needs location access to get Wi-Fi SSID";
