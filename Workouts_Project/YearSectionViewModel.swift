@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 import Combine
 
-class YearSectionViewModel: ObservableObject {
+class YearSectionViewModel: ObservableObject, WeightChartSectioning {
     @Published var chartPoints: [WeightChartPoint] = []
     @Published var selectedPoint: WeightChartPoint?
     @Published var selectedDate: Date?
@@ -260,5 +260,13 @@ class YearSectionViewModel: ObservableObject {
         } else {
             return "Weight"
         }
+    }
+}
+
+// MARK: - WeightChartSectioning
+extension YearSectionViewModel {
+    var preferredSelectedDate: Date? {
+        if let selectedDate { return selectedDate }
+        return chartPoints.last?.date
     }
 }

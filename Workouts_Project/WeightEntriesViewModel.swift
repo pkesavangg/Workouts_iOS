@@ -16,8 +16,8 @@ final class WeightEntriesViewModel: ObservableObject {
     @Published var isLoggedIn = false
     
     private var accessToken: String?
-    private let loginEmail = "testggac123@gmail.com"
-    private let loginPassword = "123456"
+    private let loginEmail = "barathchitti@gmail.com"
+    private let loginPassword = "B@r@th3939"
     
     // MARK: - Login
     func login() async {

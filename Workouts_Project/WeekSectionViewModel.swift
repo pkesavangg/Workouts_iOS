@@ -9,10 +9,11 @@ import Foundation
 import SwiftUI
 
 @MainActor
-class WeekSectionViewModel: ObservableObject {
+class WeekSectionViewModel: ObservableObject, WeightChartSectioning {
     @Published var chartPoints: [WeightChartPoint] = []
     @Published var selectedPoint: WeightChartPoint?
     @Published var selectedDate: Date?
+    @Published var selectedInterpolatedWeight: Double?
     @Published var scrollPosition: Date = Date()
     
     // Computed properties for chart data
@@ -40,35 +41,33 @@ class WeekSectionViewModel: ObservableObject {
         self.calculateWeightRange()
         self.scrollToLatestData()
     }
+
+    // MARK: - WeightChartSectioning
+    var preferredSelectedDate: Date? {
+        // Prefer the explicit selection if present; otherwise the latest point
+        if let selectedDate { return selectedDate }
+        return chartPoints.last?.date
+    }
     
-    // Select a point based on date
+    // Select a point based on date (snap to day grid; interpolate at snapped date)
     func selectPointAtDate(_ date: Date?) {
+        // Reset selection state first
+        self.selectedPoint = nil
+        self.selectedInterpolatedWeight = nil
+        
         guard let date = date else {
-            self.selectedPoint = nil
             self.selectedDate = nil
             return
         }
         
-        // Normalize the selection date to the day component only for better matching
-        let normalizedSelectionDate = normalizeToDay(date)
+        // Snap to the x-axis day grid (midnight of that day)
+        let snapped = normalizeToDay(date)
+        self.selectedDate = snapped
         
-        // Set the selected date - this will be used for the rule mark
-        self.selectedDate = normalizedSelectionDate
-        
-        // Find the closest chart point by day
-        self.selectedPoint = chartPoints.min(by: { point1, point2 in
-            let diff1 = abs(normalizeToDay(point1.date).timeIntervalSince(normalizedSelectionDate))
-            let diff2 = abs(normalizeToDay(point2.date).timeIntervalSince(normalizedSelectionDate))
-            return diff1 < diff2
-        })
-        
-        #if DEBUG
-        if let point = selectedPoint {
-            print("📅 Selected point: \(formatDate(point.date)) with weight: \(point.weight)")
-        } else {
-            print("⚠️ No point found close to selected date: \(formatDate(normalizedSelectionDate))")
+        // Compute interpolated weight at the selected position
+        if let interpolated = interpolateWeight(at: snapped) {
+            self.selectedInterpolatedWeight = interpolated
         }
-        #endif
     }
     
     // Clear selection
@@ -194,7 +193,7 @@ class WeekSectionViewModel: ObservableObject {
     
     /// Get the current weight display label
     func weightDisplayLabel() -> String {
-        if selectedPoint != nil {
+        if selectedInterpolatedWeight != nil {
             return "Selected Weight"
         } else {
             // If most data is from within a week, show "This Week"
@@ -215,8 +214,8 @@ class WeekSectionViewModel: ObservableObject {
         let weight: Double
         let unit = chartPoints.first?.originalEntry.unit ?? "kg"
         
-        if let selectedPoint = selectedPoint {
-            weight = selectedPoint.weight
+        if let interpolated = selectedInterpolatedWeight {
+            weight = interpolated
         } else {
             // Calculate average
             let weights = chartPoints.map { $0.weight }
@@ -363,6 +362,41 @@ class WeekSectionViewModel: ObservableObject {
         // For lower bound, return high (largest date <= target)
         // For upper bound, return low (smallest date >= target)
         return isLowerBound ? high : low
+    }
+
+    /// Interpolates the weight value at an arbitrary date between two neighboring chart points.
+    private func interpolateWeight(at date: Date) -> Double? {
+        guard !chartPoints.isEmpty else { return nil }
+        
+        // Find bounding indices around the selected date
+        let lowerIndex = binarySearchForDateIndex(date: date, isLowerBound: true)
+        let upperIndex = binarySearchForDateIndex(date: date, isLowerBound: false)
+        
+        // If before first point or after last point, clamp to nearest endpoint
+        if lowerIndex < 0, let first = chartPoints.first { return first.weight }
+        if upperIndex >= chartPoints.count, let last = chartPoints.last { return last.weight }
+        
+        // Indices should now be within bounds
+        guard lowerIndex >= 0, upperIndex < chartPoints.count else { return nil }
+        let lowerPoint = chartPoints[lowerIndex]
+        let upperPoint = chartPoints[upperIndex]
+        
+        // If exactly on a point
+        if lowerIndex == upperIndex {
+            self.selectedPoint = lowerPoint
+            return lowerPoint.weight
+        }
+        
+        let t0 = lowerPoint.date.timeIntervalSinceReferenceDate
+        let t1 = upperPoint.date.timeIntervalSinceReferenceDate
+        let t = date.timeIntervalSinceReferenceDate
+        
+        if t1 <= t0 { return lowerPoint.weight }
+        let ratio = max(0.0, min(1.0, (t - t0) / (t1 - t0)))
+        
+        let w0 = lowerPoint.weight
+        let w1 = upperPoint.weight
+        return w0 + ratio * (w1 - w0)
     }
 }
 

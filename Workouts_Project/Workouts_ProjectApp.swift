@@ -18,6 +18,36 @@ struct Workouts_ProjectApp: App {
     }
 }
 
+
+struct ContentView22222: View {
+    @State private var showInspector = false
+    @State private var text = "Hello, World!"
+    var body: some View {
+        Text(text)
+            .padding()
+            .onTapGesture {
+                showInspector.toggle()
+            }
+            .inspector(isPresented: $showInspector) {
+                VStack {
+                    Text("Inspector Panel")
+                        .font(.headline)
+                    Divider()
+                    Text("Additional details go here.")
+                    Button("Change text") {
+                        text = "sdfsdfsdsadasdasdasdasdasd"
+                    }
+                    Button("Close") {
+                        showInspector = false
+                    }
+                }
+                .padding()
+                .frame(minWidth: 200)
+            }
+    }
+}
+
+
 struct RootView: View {
     var body: some View {
         AlertTestMainView()
@@ -116,5 +146,5 @@ struct ProfileView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView22222()
 }

@@ -64,6 +64,14 @@ struct WeightChartPoint: Identifiable, Equatable {
     }
 }
 
+// MARK: - Chart ViewModel Protocol Abstraction
+protocol WeightChartSectioning: AnyObject {
+    /// Date preferred by a chart view model for external updates (e.g., store sync)
+    /// Implementations should typically return the current selection, or the most
+    /// recent data point date when there is no selection.
+    var preferredSelectedDate: Date? { get }
+}
+
 // MARK: - Chart Data Manager
 class WeightChartDataManager {
     // Cached formatters for better performance

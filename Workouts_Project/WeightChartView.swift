@@ -156,13 +156,15 @@ struct WeightChartView: View {
                 // Display selected point details based on selected time period
                 switch selectedTimePeriod {
                 case .week:
-                    if let selectedPoint = weekViewModel.selectedPoint {
+                    if let selectedDate = weekViewModel.selectedDate {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(weekViewModel.formatDate(selectedPoint.date))
+                            Text(weekViewModel.formatDate(selectedDate))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
-                            if let bmi = selectedPoint.originalEntry.bmi {
+                            // Show BMI only if selection snaps exactly to a data point
+                            if let selectedPoint = weekViewModel.selectedPoint,
+                               let bmi = selectedPoint.originalEntry.bmi {
                                 Text("BMI: \(String(format: "%.1f", bmi / 10.0))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -405,7 +407,11 @@ struct WeightChartView: View {
             .chartScrollPosition(x: $weekViewModel.scrollPosition)
             .chartXSelection(value: Binding(
                 get: { weekViewModel.selectedDate },
-                set: { weekViewModel.selectPointAtDate($0) }
+                set: { date in
+                    // Keep the selection after touch ends by ignoring nil updates
+                    guard let date = date else { return }
+                    weekViewModel.selectPointAtDate(date)
+                }
             ))
             .chartLegend(.hidden)
             .frame(width: geometry.size.width)
