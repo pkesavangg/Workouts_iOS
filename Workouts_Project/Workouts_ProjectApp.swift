@@ -12,7 +12,7 @@ import SwiftData
 struct Workouts_ProjectApp: App {
     var body: some Scene {
         WindowGroup {
-            WeightEntriesListView()
+            ScrollableGraphView()
         }
         .modelContainer(for: [Account.self, GoalSetting.self, BathDevice.self, BathScale.self, SampleAccount.self, UserData.self])
     }

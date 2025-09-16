@@ -8,16 +8,19 @@
 
 import SwiftUI
 
-import SwiftUI
-
 struct SnapImageCarousel: View {
     let imageNames: [String]
     @Environment(\.horizontalSizeClass) private var hSize
-    @State private var currentID: Int? = 0   // track the centered slide
+
+    // We render N copies in a "virtual" ring and start in the middle.
+    private let ringCopies = 10
+
+    // The scrollPosition needs a stable Int ID
+    @State private var currentID: Int? = 0
 
     var body: some View {
         GeometryReader { proxy in
-            // Local constants (Sendable) so the transition closure can capture them
+            // Layout constants
             let isPad = (hSize == .regular)
             let centerSize = isPad ? CGSize(width: 500, height: 350)
                                    : CGSize(width: 300, height: 225)
@@ -25,23 +28,49 @@ struct SnapImageCarousel: View {
             let spacing: CGFloat = isPad ? 24 : 1
             let sidePadding = (proxy.size.width - centerSize.width) / 2
 
+            // Guard: nothing to render
+            let count = max(imageNames.count, 1)
+            let ringCount = count * ringCopies
+            let ringStart = ringCount / 2        // a safe middle
+            let visibleIndex = (currentID! % count + count) % count
+
             VStack(spacing: 8) {
                 ScrollView(.horizontal) {
-                    HStack(spacing: spacing) {
-                        ForEach(imageNames.indices, id: \.self) { i in
-                            if let url = URL(string: imageNames[i]) {
-                                AsyncImage(url: url)
-                                    .frame(width: centerSize.width, height: centerSize.height)
-                                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                    .shadow(radius: 8)
-                                    .scrollTransition(axis: .horizontal) { content, phase in
-                                        content
-                                            .scaleEffect(phase.isIdentity ? 1.0 : sideScale)
-                                            .opacity(phase.isIdentity ? 1.0 : 0.9)
+                    LazyHStack(spacing: spacing) {
+                        // Virtual slides
+                        ForEach(0..<ringCount, id: \.self) { i in
+                            let realIndex = i % count
+                            if let url = URL(string: imageNames[realIndex]) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .success(let img):
+                                        img
+                                            .resizable()
+                                            .scaledToFill()
+                                    case .failure(_):
+                                        Color.secondary.opacity(0.1)
+                                            .overlay(
+                                                Image(systemName: "photo")
+                                                    .font(.largeTitle)
+                                                    .opacity(0.3)
+                                            )
+                                    case .empty:
+                                        ProgressView()
+                                    @unknown default:
+                                        Color.clear
                                     }
-                                    .id(i) // important: matches the scrollPosition id
+                                }
+                                .frame(width: centerSize.width, height: centerSize.height)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .shadow(radius: 8)
+                                .scrollTransition(axis: .horizontal) { content, phase in
+                                    content
+                                        .scaleEffect(phase.isIdentity ? 1.0 : sideScale)
+                                        .opacity(phase.isIdentity ? 1.0 : 0.9)
+                                }
+                                .id(i) // important: the virtual (ring) id
                             }
-
                         }
                     }
                     .scrollTargetLayout()
@@ -50,19 +79,36 @@ struct SnapImageCarousel: View {
                 }
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)
-                .scrollPosition(id: $currentID) // bind current item
-                .onAppear { currentID = 0 }
+                .scrollPosition(id: $currentID)
+                .onAppear {
+                    // Start centered in the ring
+                    currentID = ringStart
+                }
+                .onChange(of: currentID!) { _, newID in
+                    // If we drift near either ring edge, jump back to the middle equivalent.
+                    let threshold = count * 2 // how close to the edge before snapping back
+                    if newID < threshold || newID > ringCount - threshold {
+                        let middleEquivalent = ringStart + (newID % count)
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) {
+                            currentID = middleEquivalent
+                        }
+                    }
+                }
 
-                // Dot indicator
+                // Dots (reflect the "real" index)
                 HStack(spacing: 8) {
-                    ForEach(imageNames.indices, id: \.self) { i in
-                        let isSelected = (i == (currentID ?? 0))
+                    ForEach(0..<count, id: \.self) { i in
+                        let isSelected = (i == visibleIndex)
                         Circle()
                             .frame(width: isSelected ? 7 : 5, height: isSelected ? 7 : 5)
                             .opacity(isSelected ? 1.0 : 0.5)
-                            .animation(.easeInOut(duration: 0.2), value: currentID)
+                            .animation(.easeInOut(duration: 0.2), value: visibleIndex)
                             .onTapGesture {
-                                withAnimation(.snappy) { currentID = i } // taps jump to slide
+                                // Jump to the chosen slide near current center
+                                let target = (ringStart + i)
+                                withAnimation(.snappy) { currentID = target }
                             }
                             .accessibilityLabel("Slide \(i + 1)")
                             .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -73,6 +119,7 @@ struct SnapImageCarousel: View {
         }
     }
 }
+
 
 struct SnapImageCarouselContentView: View {
     var body: some View {
@@ -91,7 +138,9 @@ struct SnapImageCarouselContentView: View {
             Text("SnapImageCarouselContentView")
                 .font(.headline)
             VStack(spacing: 8) {
-                SnapImageCarousel(imageNames: ["https://s3.amazonaws.com/gg-mark/wms/image/6rWSd7o0agFUzr3ZIqiXJP.jpg", "https://s3.amazonaws.com/gg-mark/wms/image/6rWSd7o0agFUzr3ZIqiXJP.jpg"])
+                SnapImageCarousel(imageNames: [
+                    "https://s3.amazonaws.com/gg-mark/wms/image/6rWSd7o0agFUzr3ZIqiXwJP.jpg",
+                    "https://s3.amazonaws.com/gg-mark/wms/image/6rWSd7o0agFUzr3ZIqiXJP.jpg", "https://s3.amazonaws.com/gg-mark/wms/image/6rWSd7o0agFUzr3ZIqiXJP.jpg"])
                     .background(Color(.systemBackground))
             }
            

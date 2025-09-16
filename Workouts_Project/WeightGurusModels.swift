@@ -107,7 +107,17 @@ struct WeightEntry: Codable, Identifiable, Equatable {
 extension WeightEntry {
     // Static formatters to improve performance
     private static let iso8601Formatter: ISO8601DateFormatter = {
-        return ISO8601DateFormatter()
+        // First try strict InternetDateTime without fractional seconds
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    
+    private static let iso8601FormatterWithMillis: ISO8601DateFormatter = {
+        // Fallback that supports fractional seconds
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
     }()
     
     private static let displayFormatter: DateFormatter = {
@@ -124,8 +134,21 @@ extension WeightEntry {
     }
     
     var formattedDate: String {
-        guard let date = WeightEntry.iso8601Formatter.date(from: entryTimestamp) else { return entryTimestamp }
+        let date = WeightEntry.iso8601Formatter.date(from: entryTimestamp)
+            ?? WeightEntry.iso8601FormatterWithMillis.date(from: entryTimestamp)
+        guard let date else { return entryTimestamp }
         return WeightEntry.displayFormatter.string(from: date)
+    }
+    
+    var entryDate: Date? {
+        // Robust parse supporting timestamps with or without milliseconds
+        if let d = WeightEntry.iso8601Formatter.date(from: entryTimestamp) {
+            return d
+        }
+        if let d = WeightEntry.iso8601FormatterWithMillis.date(from: entryTimestamp) {
+            return d
+        }
+        return nil
     }
     
     var isCreateOperation: Bool {

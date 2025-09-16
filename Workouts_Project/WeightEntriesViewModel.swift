@@ -16,8 +16,8 @@ final class WeightEntriesViewModel: ObservableObject {
     @Published var isLoggedIn = false
     
     private var accessToken: String?
-    private let loginEmail = "barathchitti@gmail.com"
-    private let loginPassword = "B@r@th3939"
+    private let loginEmail = "barathchitti@icloud.com"
+    private let loginPassword = "123456"
     
     // MARK: - Login
     func login() async {
@@ -28,7 +28,7 @@ final class WeightEntriesViewModel: ObservableObject {
             let loginRequest = LoginRequest(email: loginEmail, password: loginPassword)
             let loginData = try JSONEncoder().encode(loginRequest)
             
-            guard let url = URL(string: "https://api.weightgurus.com/v3/account/login") else {
+            guard let url = URL(string: "http://49.207.187.28:3005/wg-server/v3/account/login") else {
                 throw URLError(.badURL)
             }
             
@@ -71,7 +71,7 @@ final class WeightEntriesViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            guard let url = URL(string: "https://api.weightgurus.com/v3/operation/r4") else {
+            guard let url = URL(string: "http://49.207.187.28:3005/wg-server/v3/operation/r4") else {
                 throw URLError(.badURL)
             }
             
